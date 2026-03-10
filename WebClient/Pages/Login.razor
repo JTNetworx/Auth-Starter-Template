@@ -1,0 +1,106 @@
+@page "/login"
+@layout MainLayout
+@inject IAuthApiService AuthApi
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+<PageTitle>Sign In</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="mt-8">
+    <MudPaper Elevation="3" Class="pa-8">
+        <div class="text-center mb-6">
+            <MudIcon Icon="@Icons.Material.Filled.Lock" Color="Color.Primary" Size="Size.Large" />
+            <MudText Typo="Typo.h5" Class="mt-2" Style="font-weight:600">Welcome Back</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">Sign in to your account</MudText>
+        </div>
+
+        <EditForm Model="_model" OnValidSubmit="SubmitAsync">
+            <DataAnnotationsValidator />
+
+            <MudTextField Label="Username"
+                          @bind-Value="_model.UserName"
+                          For="@(() => _model.UserName)"
+                          Variant="Variant.Outlined"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Person"
+                          Class="mb-4"
+                          Disabled="_loading" />
+
+            <MudTextField Label="Password"
+                          @bind-Value="_model.Password"
+                          For="@(() => _model.Password)"
+                          Variant="Variant.Outlined"
+                          InputType="@(_showPassword ? InputType.Text : InputType.Password)"
+                          Adornment="Adornment.End"
+                          AdornmentIcon="@(_showPassword ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
+                          OnAdornmentClick="@(() => _showPassword = !_showPassword)"
+                          Class="mb-2"
+                          Disabled="_loading" />
+
+            <div class="text-right mb-4">
+                <MudLink Href="/forgot-password" Typo="Typo.caption" Color="Color.Primary">
+                    Forgot password?
+                </MudLink>
+            </div>
+
+            @if (!string.IsNullOrEmpty(_errorMessage))
+            {
+                <MudAlert Severity="Severity.Error" Class="mb-4" Dense="true">@_errorMessage</MudAlert>
+            }
+
+            <MudButton ButtonType="ButtonType.Submit"
+                       Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       FullWidth="true"
+                       Size="Size.Large"
+                       Disabled="_loading"
+                       Class="mb-4">
+                @if (_loading)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                    <span>Signing in...</span>
+                }
+                else
+                {
+                    <span>Sign In</span>
+                }
+            </MudButton>
+        </EditForm>
+
+        <MudDivider Class="my-4" />
+
+        <div class="text-center">
+            <MudText Typo="Typo.body2">
+                Don't have an account?
+                <MudLink Href="/register" Color="Color.Primary">Create one</MudLink>
+            </MudText>
+        </div>
+    </MudPaper>
+</MudContainer>
+
+@code {
+    [SupplyParameterFromQuery] public string? ReturnUrl { get; set; }
+
+    private readonly LoginRequest _model = new();
+    private bool _loading;
+    private bool _showPassword;
+    private string? _errorMessage;
+
+    private async Task SubmitAsync()
+    {
+        _loading = true;
+        _errorMessage = null;
+
+        var result = await AuthApi.LoginAsync(_model);
+        _loading = false;
+
+        if (!result.IsSuccess)
+        {
+            _errorMessage = result.Error ?? "Login failed. Please check your credentials.";
+            return;
+        }
+
+        Snackbar.Add("Welcome back!", Severity.Success);
+        Nav.NavigateTo(ReturnUrl ?? "/", replace: true);
+    }
+}

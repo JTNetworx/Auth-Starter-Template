@@ -1,0 +1,92 @@
+@implements IDisposable
+@inject NotificationService Notifications
+
+<MudMenu AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" Dense="true" MaxHeight="400">
+    <ActivatorContent>
+        <MudBadge Content="@Notifications.UnreadCount"
+                  Color="Color.Error"
+                  Overlap="true"
+                  Visible="@(Notifications.UnreadCount > 0)">
+            <MudIconButton Icon="@Icons.Material.Filled.Notifications"
+                           Color="Color.Inherit"
+                           aria-label="Notifications" />
+        </MudBadge>
+    </ActivatorContent>
+    <ChildContent>
+        <div style="min-width: 320px; max-width: 400px;">
+            <div class="d-flex align-center justify-space-between px-4 py-2">
+                <MudText Typo="Typo.subtitle1" Style="font-weight:600">Notifications</MudText>
+                @if (Notifications.UnreadCount > 0)
+                {
+                    <MudButton Size="Size.Small" Color="Color.Primary" OnClick="Notifications.Clear">
+                        Clear All
+                    </MudButton>
+                }
+            </div>
+            <MudDivider />
+
+            @if (!Notifications.Notifications.Any())
+            {
+                <div class="pa-4 text-center">
+                    <MudIcon Icon="@Icons.Material.Outlined.NotificationsNone" Size="Size.Large" Color="Color.Default" />
+                    <MudText Typo="Typo.body2" Class="mt-2" Color="Color.Secondary">
+                        No notifications
+                    </MudText>
+                </div>
+            }
+            else
+            {
+                @foreach (var notification in Notifications.Notifications)
+                {
+                    <MudListItem T="string" Dense="true" Class="px-4 py-2">
+                        <div class="d-flex align-start gap-2">
+                            <MudIcon Icon="@GetIcon(notification.Severity)"
+                                     Color="@GetColor(notification.Severity)"
+                                     Size="Size.Small"
+                                     Class="mt-1" />
+                            <div class="flex-grow-1">
+                                <MudText Typo="Typo.body2" Style="font-weight:600">@notification.Title</MudText>
+                                <MudText Typo="Typo.caption">@notification.Message</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                    @notification.CreatedAt.ToString("t")
+                                </MudText>
+                            </div>
+                            <MudIconButton Icon="@Icons.Material.Filled.Close"
+                                           Size="Size.Small"
+                                           OnClick="@(() => Notifications.Remove(notification))" />
+                        </div>
+                    </MudListItem>
+                    <MudDivider />
+                }
+            }
+        </div>
+    </ChildContent>
+</MudMenu>
+
+@code {
+    protected override void OnInitialized()
+    {
+        Notifications.OnChange += StateHasChanged;
+    }
+
+    public void Dispose()
+    {
+        Notifications.OnChange -= StateHasChanged;
+    }
+
+    private static string GetIcon(AppNotificationSeverity severity) => severity switch
+    {
+        AppNotificationSeverity.Success => Icons.Material.Filled.CheckCircle,
+        AppNotificationSeverity.Warning => Icons.Material.Filled.Warning,
+        AppNotificationSeverity.Error => Icons.Material.Filled.Error,
+        _ => Icons.Material.Filled.Info
+    };
+
+    private static Color GetColor(AppNotificationSeverity severity) => severity switch
+    {
+        AppNotificationSeverity.Success => Color.Success,
+        AppNotificationSeverity.Warning => Color.Warning,
+        AppNotificationSeverity.Error => Color.Error,
+        _ => Color.Info
+    };
+}

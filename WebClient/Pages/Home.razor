@@ -1,0 +1,64 @@
+@page "/"
+@layout MainLayout
+
+<PageTitle>Home</PageTitle>
+
+<MudText Typo="Typo.h4" Style="font-weight:600" Class="mb-2">Dashboard</MudText>
+<MudText Typo="Typo.body1" Color="Color.Secondary" Class="mb-6">
+    Welcome to the Auth Starter Template.
+</MudText>
+
+<MudGrid Spacing="3">
+    <AuthorizeView>
+        <Authorized>
+            <MudItem xs="12" sm="6" md="4">
+                <MudPaper Elevation="2" Class="pa-6">
+                    <div class="d-flex align-center gap-3 mb-3">
+                        <MudIcon Icon="@Icons.Material.Filled.Person" Color="Color.Primary" Size="Size.Large" />
+                        <MudText Typo="Typo.h6" Style="font-weight:600">Profile</MudText>
+                    </div>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+                        Manage your account details, profile photo and address.
+                    </MudText>
+                    <MudButton Href="/profile" Variant="Variant.Outlined" Color="Color.Primary" FullWidth="true">
+                        View Profile
+                    </MudButton>
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12" sm="6" md="4">
+                <MudPaper Elevation="2" Class="pa-6">
+                    <div class="d-flex align-center gap-3 mb-3">
+                        <MudIcon Icon="@Icons.Material.Filled.Security" Color="Color.Secondary" Size="Size.Large" />
+                        <MudText Typo="Typo.h6" Style="font-weight:600">Security</MudText>
+                    </div>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+                        Change your password and review your account security settings.
+                    </MudText>
+                    <MudButton Href="/profile" Variant="Variant.Outlined" Color="Color.Secondary" FullWidth="true">
+                        Security Settings
+                    </MudButton>
+                </MudPaper>
+            </MudItem>
+        </Authorized>
+        <NotAuthorized>
+            <MudItem xs="12">
+                <MudPaper Elevation="2" Class="pa-8 text-center">
+                    <MudIcon Icon="@Icons.Material.Filled.Lock" Color="Color.Primary" Style="font-size:4rem" />
+                    <MudText Typo="Typo.h5" Class="mt-4" Style="font-weight:600">Get Started</MudText>
+                    <MudText Typo="Typo.body1" Color="Color.Secondary" Class="mt-2 mb-6">
+                        Sign in or create an account to access all features.
+                    </MudText>
+                    <div class="d-flex justify-center gap-3 flex-wrap">
+                        <MudButton Href="/login" Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Large">
+                            Sign In
+                        </MudButton>
+                        <MudButton Href="/register" Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large">
+                            Create Account
+                        </MudButton>
+                    </div>
+                </MudPaper>
+            </MudItem>
+        </NotAuthorized>
+    </AuthorizeView>
+</MudGrid>

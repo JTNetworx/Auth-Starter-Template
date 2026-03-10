@@ -1,0 +1,77 @@
+@page "/confirm-email"
+@layout MainLayout
+@inject HttpClient Http
+@inject NavigationManager Nav
+@inject IHttpClientFactory HttpFactory
+
+<PageTitle>Confirm Email</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="mt-8">
+    <MudPaper Elevation="3" Class="pa-8 text-center">
+        @switch (_state)
+        {
+            case State.Loading:
+                <MudProgressCircular Indeterminate="true" Color="Color.Primary" Size="Size.Large" />
+                <MudText Typo="Typo.body1" Class="mt-4">Confirming your email...</MudText>
+                break;
+
+            case State.Success:
+                <MudIcon Icon="@Icons.Material.Filled.MarkEmailRead" Color="Color.Success" Style="font-size:4rem" />
+                <MudText Typo="Typo.h5" Class="mt-4" Style="font-weight:600">Email Confirmed!</MudText>
+                <MudText Typo="Typo.body1" Color="Color.Secondary" Class="mt-2">
+                    Your email has been verified. You can now sign in.
+                </MudText>
+                <MudButton Href="/login" Variant="Variant.Filled" Color="Color.Primary" Class="mt-6" Size="Size.Large">
+                    Sign In
+                </MudButton>
+                break;
+
+            case State.Failed:
+                <MudIcon Icon="@Icons.Material.Filled.ErrorOutline" Color="Color.Error" Style="font-size:4rem" />
+                <MudText Typo="Typo.h5" Class="mt-4" Style="font-weight:600">Confirmation Failed</MudText>
+                <MudAlert Severity="Severity.Error" Class="mt-4" Dense="true">@_errorMessage</MudAlert>
+                <MudButton Href="/" Variant="Variant.Outlined" Color="Color.Primary" Class="mt-6">
+                    Go Home
+                </MudButton>
+                break;
+        }
+    </MudPaper>
+</MudContainer>
+
+@code {
+    private enum State { Loading, Success, Failed }
+    private State _state = State.Loading;
+    private string? _errorMessage;
+
+    [SupplyParameterFromQuery] public string? UserId { get; set; }
+    [SupplyParameterFromQuery] public string? Token { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (string.IsNullOrEmpty(UserId) || string.IsNullOrEmpty(Token))
+        {
+            _state = State.Failed;
+            _errorMessage = "Invalid confirmation link.";
+            return;
+        }
+
+        try
+        {
+            var client = HttpFactory.CreateClient("public");
+            var response = await client.GetAsync($"auth/confirm-email?userId={Uri.EscapeDataString(UserId)}&token={Uri.EscapeDataString(Token)}");
+
+            if (response.IsSuccessStatusCode)
+                _state = State.Success;
+            else
+            {
+                _state = State.Failed;
+                _errorMessage = "The confirmation link is invalid or has expired.";
+            }
+        }
+        catch
+        {
+            _state = State.Failed;
+            _errorMessage = "Unable to reach the server. Please try again.";
+        }
+    }
+}

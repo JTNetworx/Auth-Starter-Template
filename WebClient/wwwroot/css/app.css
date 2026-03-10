@@ -1,0 +1,72 @@
+/* ── Blazor WASM loading spinner ─────────────────────────────────────────── */
+
+html, body {
+    font-family: 'Roboto', Helvetica, Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+}
+
+#app {
+    position: relative;
+}
+
+.loading-progress {
+    position: relative;
+    display: block;
+    width: 8rem;
+    height: 8rem;
+    margin: 20vh auto 1rem;
+}
+
+.loading-progress circle {
+    fill: none;
+    stroke: #F57C00;
+    stroke-width: 0.6rem;
+    transform-origin: 50% 50%;
+    transform: rotate(-90deg);
+}
+
+.loading-progress circle:last-child {
+    stroke: #E0E0E0;
+    stroke-dasharray: calc(3.141 * var(--blazor-load-percentage, 0%) * 0.8), 500%;
+    transition: stroke-dasharray 0.05s ease-in-out;
+}
+
+.loading-progress-text {
+    position: absolute;
+    text-align: center;
+    font-weight: 600;
+    inset: calc(20vh + 6.25rem) 0 auto;
+    color: #616161;
+}
+
+.loading-progress-text:after {
+    content: var(--blazor-load-percentage-text, "Loading");
+}
+
+/* ── Blazor unhandled error UI ──────────────────────────────────────────── */
+
+#blazor-error-ui {
+    display: none;
+    position: fixed;
+    bottom: 0;
+    width: 100%;
+    padding: 0.75rem 1.25rem;
+    background: #D32F2F;
+    color: #fff;
+    z-index: 1000;
+    font-size: 0.875rem;
+}
+
+#blazor-error-ui .reload {
+    color: #FFE082;
+    font-weight: 600;
+    margin-left: 0.5rem;
+}
+
+#blazor-error-ui .dismiss {
+    cursor: pointer;
+    float: right;
+    font-weight: 600;
+    padding: 0 0.25rem;
+}

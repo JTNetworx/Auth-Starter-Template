@@ -1,0 +1,66 @@
+@inject IAuthApiService AuthApi
+@inject TokenStorageService TokenStorage
+@inject NavigationManager Nav
+
+<AuthorizeView>
+    <Authorized Context="authCtx">
+        <MudMenu AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" Dense="true">
+            <ActivatorContent>
+                <MudTooltip Text="@authCtx.User.Identity?.Name" Placement="Placement.Bottom">
+                    @if (!string.IsNullOrEmpty(_profileImageUrl))
+                    {
+                        <MudAvatar Class="cursor-pointer" Style="border: 2px solid var(--mud-palette-primary);">
+                            <MudImage Src="@_profileImageUrl" Alt="Profile" ObjectFit="ObjectFit.Cover" />
+                        </MudAvatar>
+                    }
+                    else
+                    {
+                        <MudAvatar Color="Color.Primary" Class="cursor-pointer" Style="font-weight:600">
+                            @GetInitials(authCtx.User.Identity?.Name)
+                        </MudAvatar>
+                    }
+                </MudTooltip>
+            </ActivatorContent>
+            <ChildContent>
+                <MudMenuItem Icon="@Icons.Material.Filled.Person" Href="/profile">My Profile</MudMenuItem>
+                <MudDivider Class="my-1" />
+                <MudMenuItem Icon="@Icons.Material.Filled.Logout" OnClick="LogoutAsync" IconColor="Color.Error">
+                    <MudText Color="Color.Error">Sign Out</MudText>
+                </MudMenuItem>
+            </ChildContent>
+        </MudMenu>
+    </Authorized>
+    <NotAuthorized>
+        <MudButton Href="/login" Variant="Variant.Text" Color="Color.Inherit" Class="mr-1">Login</MudButton>
+        <MudButton Href="/register" Variant="Variant.Filled" Color="Color.Primary">Register</MudButton>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    [Parameter] public string? ProfileImageUrl { get; set; }
+
+    private string? _profileImageUrl;
+
+    protected override void OnParametersSet()
+    {
+        _profileImageUrl = ProfileImageUrl;
+    }
+
+    private async Task LogoutAsync()
+    {
+        var refreshToken = await TokenStorage.GetRefreshTokenAsync();
+        if (!string.IsNullOrEmpty(refreshToken))
+            await AuthApi.LogoutAsync(refreshToken);
+
+        Nav.NavigateTo("/login", forceLoad: false);
+    }
+
+    private static string GetInitials(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "?";
+        var parts = name.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length >= 2
+            ? $"{parts[0][0]}{parts[^1][0]}".ToUpperInvariant()
+            : name[..1].ToUpperInvariant();
+    }
+}

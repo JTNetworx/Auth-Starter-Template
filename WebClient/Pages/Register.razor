@@ -1,0 +1,134 @@
+@page "/register"
+@layout MainLayout
+@inject IAuthApiService AuthApi
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+<PageTitle>Create Account</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="mt-8">
+    <MudPaper Elevation="3" Class="pa-8">
+        <div class="text-center mb-6">
+            <MudIcon Icon="@Icons.Material.Filled.PersonAdd" Color="Color.Primary" Size="Size.Large" />
+            <MudText Typo="Typo.h5" Class="mt-2" Style="font-weight:600">Create Account</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">Join us today</MudText>
+        </div>
+
+        <EditForm Model="_model" OnValidSubmit="SubmitAsync">
+            <DataAnnotationsValidator />
+
+            <MudGrid Spacing="2">
+                <MudItem xs="12" sm="6">
+                    <MudTextField Label="First Name"
+                                  @bind-Value="_model.FirstName"
+                                  For="@(() => _model.FirstName)"
+                                  Variant="Variant.Outlined"
+                                  Disabled="_loading" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTextField Label="Last Name"
+                                  @bind-Value="_model.LastName"
+                                  For="@(() => _model.LastName)"
+                                  Variant="Variant.Outlined"
+                                  Disabled="_loading" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField Label="Username"
+                                  @bind-Value="_model.UserName"
+                                  For="@(() => _model.UserName)"
+                                  Variant="Variant.Outlined"
+                                  Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Filled.AlternateEmail"
+                                  HelperText="Letters, numbers and underscores only"
+                                  Disabled="_loading" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField Label="Email Address"
+                                  @bind-Value="_model.Email"
+                                  For="@(() => _model.Email)"
+                                  Variant="Variant.Outlined"
+                                  Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Filled.Email"
+                                  Disabled="_loading" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField Label="Password"
+                                  @bind-Value="_model.Password"
+                                  For="@(() => _model.Password)"
+                                  Variant="Variant.Outlined"
+                                  InputType="@(_showPassword ? InputType.Text : InputType.Password)"
+                                  HelperText="Min 8 chars, upper, lower, digit & special char"
+                                  Adornment="Adornment.End"
+                                  AdornmentIcon="@(_showPassword ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
+                                  OnAdornmentClick="@(() => _showPassword = !_showPassword)"
+                                  Disabled="_loading" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField Label="Confirm Password"
+                                  @bind-Value="_model.ConfirmPassword"
+                                  For="@(() => _model.ConfirmPassword)"
+                                  Variant="Variant.Outlined"
+                                  InputType="InputType.Password"
+                                  Disabled="_loading" />
+                </MudItem>
+            </MudGrid>
+
+            @if (!string.IsNullOrEmpty(_errorMessage))
+            {
+                <MudAlert Severity="Severity.Error" Class="mt-4" Dense="true">@_errorMessage</MudAlert>
+            }
+
+            <MudButton ButtonType="ButtonType.Submit"
+                       Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       FullWidth="true"
+                       Size="Size.Large"
+                       Disabled="_loading"
+                       Class="mt-6 mb-4">
+                @if (_loading)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                    <span>Creating account...</span>
+                }
+                else
+                {
+                    <span>Create Account</span>
+                }
+            </MudButton>
+        </EditForm>
+
+        <MudDivider Class="my-4" />
+
+        <div class="text-center">
+            <MudText Typo="Typo.body2">
+                Already have an account?
+                <MudLink Href="/login" Color="Color.Primary">Sign in</MudLink>
+            </MudText>
+        </div>
+    </MudPaper>
+</MudContainer>
+
+@code {
+    private readonly RegisterRequest _model = new();
+    private bool _loading;
+    private bool _showPassword;
+    private string? _errorMessage;
+
+    private async Task SubmitAsync()
+    {
+        _loading = true;
+        _errorMessage = null;
+
+        var result = await AuthApi.RegisterAsync(_model);
+        _loading = false;
+
+        if (!result.IsSuccess)
+        {
+            _errorMessage = result.Error ?? "Registration failed.";
+            return;
+        }
+
+        Snackbar.Add("Account created! Please check your email to confirm.", Severity.Success, cfg => cfg.VisibleStateDuration = 8000);
+        Nav.NavigateTo("/", replace: true);
+    }
+}
