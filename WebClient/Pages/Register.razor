@@ -30,7 +30,8 @@
                 <MudText Typo="Typo.body2" Color="Color.Secondary">Join us today</MudText>
             </div>
 
-            <EditForm Model="_model" OnValidSubmit="SubmitAsync">
+            <MudFocusTrap DefaultFocus="DefaultFocus.FirstChild">
+            <EditForm EditContext="@_editContext" OnValidSubmit="SubmitAsync" @onkeydown="HandleKeyDown">
                 <DataAnnotationsValidator />
 
                 <MudGrid Spacing="2">
@@ -39,14 +40,16 @@
                                       @bind-Value="_model.FirstName"
                                       For="@(() => _model.FirstName)"
                                       Variant="Variant.Outlined"
-                                      Disabled="_loading" />
+                                      Disabled="_loading"
+                                      autocomplete="given-name" />
                     </MudItem>
                     <MudItem xs="12" sm="6">
                         <MudTextField Label="Last Name"
                                       @bind-Value="_model.LastName"
                                       For="@(() => _model.LastName)"
                                       Variant="Variant.Outlined"
-                                      Disabled="_loading" />
+                                      Disabled="_loading"
+                                      autocomplete="family-name" />
                     </MudItem>
                     <MudItem xs="12">
                         <MudTextField Label="Username"
@@ -56,7 +59,8 @@
                                       Adornment="Adornment.Start"
                                       AdornmentIcon="@Icons.Material.Filled.AlternateEmail"
                                       HelperText="Letters, numbers and underscores only"
-                                      Disabled="_loading" />
+                                      Disabled="_loading"
+                                      autocomplete="username" />
                     </MudItem>
                     <MudItem xs="12">
                         <MudTextField Label="Email Address"
@@ -65,7 +69,9 @@
                                       Variant="Variant.Outlined"
                                       Adornment="Adornment.Start"
                                       AdornmentIcon="@Icons.Material.Filled.Email"
-                                      Disabled="_loading" />
+                                      Disabled="_loading"
+                                      autocomplete="email"
+                                      InputType="InputType.Email" />
                     </MudItem>
                     <MudItem xs="12">
                         <MudTextField Label="Password"
@@ -77,7 +83,8 @@
                                       Adornment="Adornment.End"
                                       AdornmentIcon="@(_showPassword ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
                                       OnAdornmentClick="@(() => _showPassword = !_showPassword)"
-                                      Disabled="_loading" />
+                                      Disabled="_loading"
+                                      autocomplete="new-password" />
                     </MudItem>
                     <MudItem xs="12">
                         <MudTextField Label="Confirm Password"
@@ -85,7 +92,8 @@
                                       For="@(() => _model.ConfirmPassword)"
                                       Variant="Variant.Outlined"
                                       InputType="InputType.Password"
-                                      Disabled="_loading" />
+                                      Disabled="_loading"
+                                      autocomplete="new-password" />
                     </MudItem>
                 </MudGrid>
 
@@ -112,6 +120,7 @@
                     }
                 </MudButton>
             </EditForm>
+            </MudFocusTrap>
 
             <MudDivider Class="my-4" />
 
@@ -127,11 +136,23 @@
 
 @code {
     private readonly RegisterRequest _model = new();
+    private EditContext _editContext = null!;
     private bool _loading;
     private bool _showPassword;
     private bool _registered;
     private string? _registeredEmail;
     private string? _errorMessage;
+
+    protected override void OnInitialized()
+    {
+        _editContext = new EditContext(_model);
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !_loading && _editContext.Validate())
+            await SubmitAsync();
+    }
 
     private async Task SubmitAsync()
     {

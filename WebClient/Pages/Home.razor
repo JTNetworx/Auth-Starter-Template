@@ -3,62 +3,134 @@
 
 <PageTitle>Home</PageTitle>
 
-<MudText Typo="Typo.h4" Style="font-weight:600" Class="mb-2">Dashboard</MudText>
-<MudText Typo="Typo.body1" Color="Color.Secondary" Class="mb-6">
-    Welcome to the Auth Starter Template.
-</MudText>
+<AuthorizeView>
+    <Authorized Context="authCtx">
+        <MudText Typo="Typo.h5" Style="font-weight:600" Class="mb-1">
+            Welcome back, @authCtx.User.FindFirst("given_name")?.Value!
+        </MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-6">
+            You're signed in and ready to go. This is your application dashboard.
+        </MudText>
 
-<MudGrid Spacing="3">
-    <AuthorizeView>
-        <Authorized>
+        <MudGrid Spacing="3">
             <MudItem xs="12" sm="6" md="4">
-                <MudPaper Elevation="2" Class="pa-6">
+                <MudPaper Elevation="2" Class="pa-6 d-flex flex-column" Style="height:100%;">
                     <div class="d-flex align-center gap-3 mb-3">
                         <MudIcon Icon="@Icons.Material.Filled.Person" Color="Color.Primary" Size="Size.Large" />
-                        <MudText Typo="Typo.h6" Style="font-weight:600">Profile</MudText>
+                        <MudText Typo="Typo.h6" Style="font-weight:600">My Profile</MudText>
                     </div>
-                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
-                        Manage your account details, profile photo and address.
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4" Style="flex:1;">
+                        Update your name, contact info, address, profile photo and change your password.
                     </MudText>
                     <MudButton Href="/profile" Variant="Variant.Outlined" Color="Color.Primary" FullWidth="true">
-                        View Profile
+                        Go to Profile
                     </MudButton>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+    </Authorized>
+
+    <NotAuthorized>
+        @* Hero *@
+        <div class="text-center mb-10">
+            <MudText Typo="Typo.h3" Style="font-weight:700; letter-spacing:-.5px;" Class="mb-3">
+                Auth Starter Template
+            </MudText>
+            <MudText Typo="Typo.h6" Color="Color.Secondary" Style="font-weight:400; max-width:560px; margin:0 auto;" Class="mb-8">
+                A production-ready full-stack authentication foundation built with .NET 10,
+                Blazor WebAssembly, and MudBlazor. Clone it, configure it, ship it.
+            </MudText>
+            <div class="d-flex justify-center gap-3 flex-wrap">
+                <MudButton Href="/register" Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large"
+                           StartIcon="@Icons.Material.Filled.PersonAdd">
+                    Get Started
+                </MudButton>
+                <MudButton Href="/login" Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Large"
+                           StartIcon="@Icons.Material.Filled.Login">
+                    Sign In
+                </MudButton>
+            </div>
+        </div>
+
+        @* Feature grid *@
+        <MudGrid Spacing="3">
+            <MudItem xs="12" sm="6" md="4">
+                <MudPaper Elevation="1" Class="pa-6" Style="height:100%;">
+                    <div class="d-flex align-center gap-2 mb-3">
+                        <MudIcon Icon="@Icons.Material.Filled.VpnKey" Color="Color.Primary" />
+                        <MudText Typo="Typo.subtitle1" Style="font-weight:600">JWT Authentication</MudText>
+                    </div>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        Short-lived access tokens with rotating refresh tokens. Silent background refresh
+                        keeps users logged in without interruption.
+                    </MudText>
                 </MudPaper>
             </MudItem>
 
             <MudItem xs="12" sm="6" md="4">
-                <MudPaper Elevation="2" Class="pa-6">
-                    <div class="d-flex align-center gap-3 mb-3">
-                        <MudIcon Icon="@Icons.Material.Filled.Security" Color="Color.Secondary" Size="Size.Large" />
-                        <MudText Typo="Typo.h6" Style="font-weight:600">Security</MudText>
+                <MudPaper Elevation="1" Class="pa-6" Style="height:100%;">
+                    <div class="d-flex align-center gap-2 mb-3">
+                        <MudIcon Icon="@Icons.Material.Filled.MarkEmailRead" Color="Color.Primary" />
+                        <MudText Typo="Typo.subtitle1" Style="font-weight:600">Email Confirmation</MudText>
                     </div>
-                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
-                        Change your password and review your account security settings.
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        New accounts require email verification before sign-in. Forgot password and
+                        reset flows are fully wired end to end.
                     </MudText>
-                    <MudButton Href="/profile" Variant="Variant.Outlined" Color="Color.Secondary" FullWidth="true">
-                        Security Settings
-                    </MudButton>
                 </MudPaper>
             </MudItem>
-        </Authorized>
-        <NotAuthorized>
-            <MudItem xs="12">
-                <MudPaper Elevation="2" Class="pa-8 text-center">
-                    <MudIcon Icon="@Icons.Material.Filled.Lock" Color="Color.Primary" Style="font-size:4rem" />
-                    <MudText Typo="Typo.h5" Class="mt-4" Style="font-weight:600">Get Started</MudText>
-                    <MudText Typo="Typo.body1" Color="Color.Secondary" Class="mt-2 mb-6">
-                        Sign in or create an account to access all features.
-                    </MudText>
-                    <div class="d-flex justify-center gap-3 flex-wrap">
-                        <MudButton Href="/login" Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Large">
-                            Sign In
-                        </MudButton>
-                        <MudButton Href="/register" Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large">
-                            Create Account
-                        </MudButton>
+
+            <MudItem xs="12" sm="6" md="4">
+                <MudPaper Elevation="1" Class="pa-6" Style="height:100%;">
+                    <div class="d-flex align-center gap-2 mb-3">
+                        <MudIcon Icon="@Icons.Material.Filled.ManageAccounts" Color="Color.Primary" />
+                        <MudText Typo="Typo.subtitle1" Style="font-weight:600">User Profiles</MudText>
                     </div>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        Full profile editing with photo upload. Storage is swappable between SQL Server
+                        and any S3-compatible bucket at config time.
+                    </MudText>
                 </MudPaper>
             </MudItem>
-        </NotAuthorized>
-    </AuthorizeView>
-</MudGrid>
+
+            <MudItem xs="12" sm="6" md="4">
+                <MudPaper Elevation="1" Class="pa-6" Style="height:100%;">
+                    <div class="d-flex align-center gap-2 mb-3">
+                        <MudIcon Icon="@Icons.Material.Filled.Shield" Color="Color.Primary" />
+                        <MudText Typo="Typo.subtitle1" Style="font-weight:600">Security Built In</MudText>
+                    </div>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        Rate limiting on auth endpoints, account lockout after failed attempts,
+                        refresh token rotation, and server-side revocation on logout.
+                    </MudText>
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12" sm="6" md="4">
+                <MudPaper Elevation="1" Class="pa-6" Style="height:100%;">
+                    <div class="d-flex align-center gap-2 mb-3">
+                        <MudIcon Icon="@Icons.Material.Filled.Layers" Color="Color.Primary" />
+                        <MudText Typo="Typo.subtitle1" Style="font-weight:600">Clean Architecture</MudText>
+                    </div>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        Domain / Application / Infrastructure / API separation. Add your features
+                        without touching the auth plumbing.
+                    </MudText>
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12" sm="6" md="4">
+                <MudPaper Elevation="1" Class="pa-6" Style="height:100%;">
+                    <div class="d-flex align-center gap-2 mb-3">
+                        <MudIcon Icon="@Icons.Material.Filled.Palette" Color="Color.Primary" />
+                        <MudText Typo="Typo.subtitle1" Style="font-weight:600">MudBlazor UI</MudText>
+                    </div>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        Material Design components with a custom theme, dark/light mode toggle
+                        persisted to localStorage, and a responsive drawer layout.
+                    </MudText>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+    </NotAuthorized>
+</AuthorizeView>
