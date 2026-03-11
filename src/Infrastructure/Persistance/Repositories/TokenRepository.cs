@@ -7,8 +7,10 @@ public interface ITokenRepository
 {
     Task SaveRefreshTokenAsync(RefreshToken token);
     Task<RefreshToken?> GetRefreshTokenAsync(string token);
+    Task<RefreshToken?> GetActiveTokenByIdAsync(Guid id, string userId);
+    Task<List<RefreshToken>> GetActiveSessionsForUserAsync(string userId);
     Task UpdateRefreshTokenAsync(RefreshToken token);
-    Task DeleteAllRefreshTokensForUserAsync(string userId);
+    Task DeleteAllRefreshTokensForUserAsync(string userId, Guid? excludeId = null);
 }
 
 public sealed class TokenRepository : ITokenRepository
@@ -30,16 +32,27 @@ public sealed class TokenRepository : ITokenRepository
             .Include(t => t.User)
             .FirstOrDefaultAsync(t => t.Token == token);
 
+    public async Task<RefreshToken?> GetActiveTokenByIdAsync(Guid id, string userId) =>
+        await _context.RefreshTokens
+            .FirstOrDefaultAsync(t => t.Id == id && t.UserId == userId
+                && t.RevokedAtUtc == null && t.ExpiresUtc > DateTime.UtcNow);
+
+    public async Task<List<RefreshToken>> GetActiveSessionsForUserAsync(string userId) =>
+        await _context.RefreshTokens
+            .Where(t => t.UserId == userId && t.RevokedAtUtc == null && t.ExpiresUtc > DateTime.UtcNow)
+            .OrderByDescending(t => t.LastUsedUtc ?? t.CreatedAtUtc)
+            .ToListAsync();
+
     public Task UpdateRefreshTokenAsync(RefreshToken token)
     {
         _context.RefreshTokens.Update(token);
         return Task.CompletedTask;
     }
 
-    public async Task DeleteAllRefreshTokensForUserAsync(string userId)
+    public async Task DeleteAllRefreshTokensForUserAsync(string userId, Guid? excludeId = null)
     {
         var tokens = await _context.RefreshTokens
-            .Where(t => t.UserId == userId)
+            .Where(t => t.UserId == userId && (excludeId == null || t.Id != excludeId))
             .ToListAsync();
 
         _context.RefreshTokens.RemoveRange(tokens);

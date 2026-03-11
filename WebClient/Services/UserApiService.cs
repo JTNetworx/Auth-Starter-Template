@@ -87,6 +87,53 @@ public sealed class UserApiService : IUserApiService
         }
     }
 
+    public async Task<ApiResult<List<SessionDto>>> GetSessionsAsync()
+    {
+        try
+        {
+            var response = await _http.GetAsync("users/me/sessions");
+            if (!response.IsSuccessStatusCode)
+                return ApiResult<List<SessionDto>>.Failure(await ReadErrorAsync(response));
+
+            var sessions = await response.Content.ReadFromJsonAsync<List<SessionDto>>();
+            return ApiResult<List<SessionDto>>.Success(sessions ?? []);
+        }
+        catch (Exception ex)
+        {
+            return ApiResult<List<SessionDto>>.Failure(ex.Message);
+        }
+    }
+
+    public async Task<ApiResult> RevokeSessionAsync(Guid sessionId)
+    {
+        try
+        {
+            var response = await _http.DeleteAsync($"users/me/sessions/{sessionId}");
+            return response.IsSuccessStatusCode
+                ? ApiResult.Success()
+                : ApiResult.Failure(await ReadErrorAsync(response));
+        }
+        catch (Exception ex)
+        {
+            return ApiResult.Failure(ex.Message);
+        }
+    }
+
+    public async Task<ApiResult> RevokeAllOtherSessionsAsync()
+    {
+        try
+        {
+            var response = await _http.DeleteAsync("users/me/sessions");
+            return response.IsSuccessStatusCode
+                ? ApiResult.Success()
+                : ApiResult.Failure(await ReadErrorAsync(response));
+        }
+        catch (Exception ex)
+        {
+            return ApiResult.Failure(ex.Message);
+        }
+    }
+
     private static async Task<string> ReadErrorAsync(HttpResponseMessage response)
     {
         try

@@ -12,4 +12,9 @@ public class RefreshToken
 
     public string UserId { get; set; } = string.Empty;
     public User? User { get; set; } = null!;
+
+    // Session metadata — captured at login / token refresh
+    public string? IpAddress { get; set; }
+    public string? UserAgent { get; set; }
+    public DateTime? LastUsedUtc { get; set; }
 }

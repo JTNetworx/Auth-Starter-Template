@@ -13,4 +13,9 @@ public interface IAuthService
     Task<Result> ChangePasswordAsync(string userId, ChangePasswordDto dto);
     Task<Result> ForgotPasswordAsync(string email);
     Task<Result> ResetPasswordAsync(ResetPasswordDto dto);
+
+    // Session management
+    Task<Result<List<SessionDto>>> GetSessionsAsync(string userId, Guid? currentSessionId);
+    Task<Result> RevokeSessionAsync(Guid sessionId, string userId);
+    Task<Result> RevokeAllOtherSessionsAsync(string userId, Guid? currentSessionId);
 }

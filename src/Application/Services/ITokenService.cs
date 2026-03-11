@@ -5,7 +5,7 @@ namespace Application.Services;
 
 public interface ITokenService
 {
-    Task<string> GenerateAccessToken(User user, IList<string> roles);
-    RefreshToken GenerateRefreshToken(string userId);
+    Task<string> GenerateAccessToken(User user, IList<string> roles, Guid sessionId);
+    RefreshToken GenerateRefreshToken(string userId, string? ipAddress = null, string? userAgent = null);
     ClaimsPrincipal GetPrincipalFromExpiredToken(string token);
 }

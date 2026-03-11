@@ -2,6 +2,7 @@ using Application.DTOs.Auth;
 using Application.Services;
 using Domain.Users;
 using Infrastructure.Persistance.Repositories;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using SharedKernel;
 
@@ -15,6 +16,7 @@ public sealed class PasskeyService : IPasskeyService
     private readonly ITokenRepository _tokenRepository;
     private readonly IUnitOfWork _uow;
     private readonly IDateTimeProvider _dateTime;
+    private readonly IHttpContextAccessor _httpContextAccessor;
 
     public PasskeyService(
         SignInManager<User> signInManager,
@@ -22,7 +24,8 @@ public sealed class PasskeyService : IPasskeyService
         ITokenService tokenService,
         ITokenRepository tokenRepository,
         IUnitOfWork uow,
-        IDateTimeProvider dateTime)
+        IDateTimeProvider dateTime,
+        IHttpContextAccessor httpContextAccessor)
     {
         _signInManager = signInManager;
         _userManager = userManager;
@@ -30,7 +33,14 @@ public sealed class PasskeyService : IPasskeyService
         _tokenRepository = tokenRepository;
         _uow = uow;
         _dateTime = dateTime;
+        _httpContextAccessor = httpContextAccessor;
     }
+
+    private string? GetClientIp() =>
+        _httpContextAccessor.HttpContext?.Connection.RemoteIpAddress?.ToString();
+
+    private string? GetUserAgent() =>
+        _httpContextAccessor.HttpContext?.Request.Headers.UserAgent.ToString();
 
     public async Task<Result<string>> BeginRegistrationAsync(string userId)
     {
@@ -103,9 +113,9 @@ public sealed class PasskeyService : IPasskeyService
         user.LastLoginUtc = _dateTime.UtcNow;
         await _userManager.UpdateAsync(user);
 
+        var refreshToken = _tokenService.GenerateRefreshToken(user.Id, GetClientIp(), GetUserAgent());
         var roles = await _userManager.GetRolesAsync(user);
-        var accessToken = await _tokenService.GenerateAccessToken(user, roles);
-        var refreshToken = _tokenService.GenerateRefreshToken(user.Id);
+        var accessToken = await _tokenService.GenerateAccessToken(user, roles, refreshToken.Id);
         await _tokenRepository.SaveRefreshTokenAsync(refreshToken);
         await _uow.SaveChangesAsync();
 

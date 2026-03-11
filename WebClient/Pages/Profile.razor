@@ -258,6 +258,89 @@ else if (_profile is not null)
                     </div>
                 </MudTabPanel>
 
+                <MudTabPanel Text="Sessions" Icon="@Icons.Material.Filled.Devices">
+                    <div class="pa-6 pt-8">
+                        <div class="d-flex align-center justify-space-between mb-4">
+                            <div>
+                                <MudText Typo="Typo.subtitle1" Style="font-weight:600">Active Sessions</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                    These devices are currently signed in to your account.
+                                </MudText>
+                            </div>
+                            <MudButton Variant="Variant.Outlined"
+                                       Color="Color.Error"
+                                       StartIcon="@Icons.Material.Filled.Logout"
+                                       Size="Size.Small"
+                                       Disabled="_sessionsWorking"
+                                       OnClick="RevokeAllOtherSessionsAsync">
+                                Sign Out All Other Devices
+                            </MudButton>
+                        </div>
+
+                        @if (_sessionError is not null)
+                        {
+                            <MudAlert Severity="Severity.Error" Class="mb-4" Dense="true">@_sessionError</MudAlert>
+                        }
+
+                        @if (_loadingSessions)
+                        {
+                            <div class="d-flex justify-center pa-6">
+                                <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+                            </div>
+                        }
+                        else if (_sessions.Count == 0)
+                        {
+                            <MudPaper Elevation="0" Class="pa-6 text-center" Style="border:1px dashed var(--mud-palette-lines-default);">
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">No active sessions found.</MudText>
+                            </MudPaper>
+                        }
+                        else
+                        {
+                            <MudList T="SessionDto" Dense="false">
+                                @foreach (var session in _sessions)
+                                {
+                                    <MudListItem T="SessionDto">
+                                        <div class="d-flex align-center justify-space-between gap-3">
+                                            <div class="d-flex align-center gap-3" Style="min-width:0;">
+                                                <MudIcon Icon="@(session.IsCurrent ? Icons.Material.Filled.DevicesOther : Icons.Material.Filled.Computer)"
+                                                         Color="@(session.IsCurrent ? Color.Primary : Color.Secondary)" />
+                                                <div Style="min-width:0;">
+                                                    <div class="d-flex align-center gap-2 flex-wrap">
+                                                        <MudText Typo="Typo.body2" Style="font-weight:600;">
+                                                            @FormatUserAgent(session.UserAgent)
+                                                        </MudText>
+                                                        @if (session.IsCurrent)
+                                                        {
+                                                            <MudChip T="string" Color="Color.Success" Size="Size.Small" Class="my-0">Current</MudChip>
+                                                        }
+                                                    </div>
+                                                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                                        @(session.IpAddress ?? "Unknown IP")
+                                                        &nbsp;·&nbsp;
+                                                        Last used @((session.LastUsedUtc ?? session.CreatedAtUtc).ToLocalTime().ToString("g"))
+                                                    </MudText>
+                                                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                                        Started @session.CreatedAtUtc.ToLocalTime().ToString("g")
+                                                    </MudText>
+                                                </div>
+                                            </div>
+                                            @if (!session.IsCurrent)
+                                            {
+                                                <MudIconButton Icon="@Icons.Material.Filled.Logout"
+                                                               Color="Color.Error"
+                                                               Size="Size.Small"
+                                                               Disabled="_sessionsWorking"
+                                                               OnClick="@(() => RevokeSessionAsync(session.Id))" />
+                                            }
+                                        </div>
+                                    </MudListItem>
+                                    <MudDivider />
+                                }
+                            </MudList>
+                        }
+                    </div>
+                </MudTabPanel>
+
                 <MudTabPanel Text="Passkeys" Icon="@Icons.Material.Filled.Fingerprint">
                     <div class="pa-6 pt-8">
                         <div class="d-flex align-center justify-space-between mb-4">
@@ -344,6 +427,11 @@ else if (_profile is not null)
     private List<CountryDto> _countries = [];
     private bool _loadingCountries;
 
+    private List<SessionDto> _sessions = [];
+    private bool _loadingSessions;
+    private bool _sessionsWorking;
+    private string? _sessionError;
+
     private List<PasskeyInfoDto> _passkeys = [];
     private bool _loadingPasskeys;
     private bool _passkeyWorking;
@@ -357,7 +445,7 @@ else if (_profile is not null)
 
     protected override async Task OnInitializedAsync()
     {
-        await Task.WhenAll(LoadCountriesAsync(), LoadPasskeysAsync());
+        await Task.WhenAll(LoadCountriesAsync(), LoadPasskeysAsync(), LoadSessionsAsync());
         await LoadProfileAsync();
     }
 
@@ -396,6 +484,72 @@ else if (_profile is not null)
         _loadingCountries = false;
         if (result.IsSuccess)
             _countries = result.Value!;
+    }
+
+    private async Task LoadSessionsAsync()
+    {
+        _loadingSessions = true;
+        var result = await UserApi.GetSessionsAsync();
+        _loadingSessions = false;
+        if (result.IsSuccess)
+            _sessions = result.Value!;
+    }
+
+    private async Task RevokeSessionAsync(Guid sessionId)
+    {
+        _sessionsWorking = true;
+        _sessionError = null;
+        var result = await UserApi.RevokeSessionAsync(sessionId);
+        _sessionsWorking = false;
+
+        if (!result.IsSuccess)
+        {
+            _sessionError = result.Error;
+            return;
+        }
+
+        Snackbar.Add("Session signed out.", Severity.Info);
+        await LoadSessionsAsync();
+    }
+
+    private async Task RevokeAllOtherSessionsAsync()
+    {
+        _sessionsWorking = true;
+        _sessionError = null;
+        var result = await UserApi.RevokeAllOtherSessionsAsync();
+        _sessionsWorking = false;
+
+        if (!result.IsSuccess)
+        {
+            _sessionError = result.Error;
+            return;
+        }
+
+        Snackbar.Add("All other sessions have been signed out.", Severity.Success);
+        await LoadSessionsAsync();
+    }
+
+    private static string FormatUserAgent(string? ua)
+    {
+        if (string.IsNullOrWhiteSpace(ua)) return "Unknown device";
+
+        // Basic UA string parsing — extract browser and OS hints
+        var browser = ua.Contains("Edg/") ? "Edge"
+            : ua.Contains("Chrome/") ? "Chrome"
+            : ua.Contains("Firefox/") ? "Firefox"
+            : ua.Contains("Safari/") && !ua.Contains("Chrome") ? "Safari"
+            : ua.Contains("OPR/") || ua.Contains("Opera") ? "Opera"
+            : "Browser";
+
+        var os = ua.Contains("Windows") ? "Windows"
+            : ua.Contains("Macintosh") ? "macOS"
+            : ua.Contains("iPhone") ? "iPhone"
+            : ua.Contains("iPad") ? "iPad"
+            : ua.Contains("Android") ? "Android"
+            : ua.Contains("Linux") ? "Linux"
+            : "Unknown OS";
+
+        return $"{browser} on {os}";
     }
 
     private async Task LoadPasskeysAsync()

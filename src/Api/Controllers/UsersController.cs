@@ -15,10 +15,12 @@ public class UsersController : ControllerBase
     private const long MaxImageSizeBytes = 5 * 1024 * 1024; // 5 MB
 
     private readonly IUserProfileService _userProfileService;
+    private readonly IAuthService _authService;
 
-    public UsersController(IUserProfileService userProfileService)
+    public UsersController(IUserProfileService userProfileService, IAuthService authService)
     {
         _userProfileService = userProfileService;
+        _authService = authService;
     }
 
     /// <summary>
@@ -110,6 +112,57 @@ public class UsersController : ControllerBase
         return File(result.Value.Data, result.Value.ContentType);
     }
 
+    /// <summary>
+    /// Returns all active sessions for the current user.
+    /// The current session is identified via the 'sid' claim in the JWT.
+    /// </summary>
+    [HttpGet("me/sessions")]
+    public async Task<IActionResult> GetSessionsAsync()
+    {
+        var userId = GetUserId();
+        if (userId is null) return Unauthorized();
+
+        var currentSessionId = GetSessionId();
+        var result = await _authService.GetSessionsAsync(userId, currentSessionId);
+        if (result.IsFailure) return BadRequest(new { result.Error });
+
+        return Ok(result.Value);
+    }
+
+    /// <summary>
+    /// Revokes a single session by its ID.
+    /// </summary>
+    [HttpDelete("me/sessions/{sessionId:guid}")]
+    public async Task<IActionResult> RevokeSessionAsync(Guid sessionId)
+    {
+        var userId = GetUserId();
+        if (userId is null) return Unauthorized();
+
+        var result = await _authService.RevokeSessionAsync(sessionId, userId);
+        if (result.IsFailure) return BadRequest(new { result.Error });
+
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Revokes all sessions except the current one.
+    /// </summary>
+    [HttpDelete("me/sessions")]
+    public async Task<IActionResult> RevokeAllOtherSessionsAsync()
+    {
+        var userId = GetUserId();
+        if (userId is null) return Unauthorized();
+
+        var currentSessionId = GetSessionId();
+        var result = await _authService.RevokeAllOtherSessionsAsync(userId, currentSessionId);
+        if (result.IsFailure) return BadRequest(new { result.Error });
+
+        return NoContent();
+    }
+
     private string? GetUserId() =>
         User.FindFirstValue("sub") ?? User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+    private Guid? GetSessionId() =>
+        Guid.TryParse(User.FindFirstValue("sid"), out var id) ? id : null;
 }

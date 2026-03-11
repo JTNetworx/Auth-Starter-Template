@@ -21,7 +21,7 @@ public sealed class TokenService : ITokenService
         _dateTime = dateTime;
     }
 
-    public Task<string> GenerateAccessToken(User user, IList<string> roles)
+    public Task<string> GenerateAccessToken(User user, IList<string> roles, Guid sessionId)
     {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_config["Jwt:SecretKey"]!));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
@@ -34,6 +34,7 @@ public sealed class TokenService : ITokenService
             new(JwtRegisteredClaimNames.GivenName, user.FirstName),
             new(JwtRegisteredClaimNames.FamilyName, user.LastName),
             new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+            new("sid", sessionId.ToString()),
         };
 
         foreach (var role in roles)
@@ -49,14 +50,17 @@ public sealed class TokenService : ITokenService
         return Task.FromResult(new JwtSecurityTokenHandler().WriteToken(token));
     }
 
-    public RefreshToken GenerateRefreshToken(string userId)
+    public RefreshToken GenerateRefreshToken(string userId, string? ipAddress = null, string? userAgent = null)
     {
         return new RefreshToken
         {
             Token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64)),
             ExpiresUtc = _dateTime.UtcNow.AddDays(_config.GetValue<int>("Jwt:ExpirationDays")),
             CreatedAtUtc = _dateTime.UtcNow,
-            UserId = userId
+            UserId = userId,
+            IpAddress = ipAddress,
+            UserAgent = userAgent?.Length > 512 ? userAgent[..512] : userAgent,
+            LastUsedUtc = _dateTime.UtcNow
         };
     }
 

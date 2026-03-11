@@ -20,6 +20,9 @@ public sealed class RefreshTokenConfiguration : IEntityTypeConfiguration<Refresh
         builder.Property(t => t.ExpiresUtc)
             .IsRequired();
         builder.Property(t => t.RevokedAtUtc);
+        builder.Property(t => t.IpAddress).HasMaxLength(64);
+        builder.Property(t => t.UserAgent).HasMaxLength(512);
+        builder.Property(t => t.LastUsedUtc);
 
         builder.Ignore(t => t.IsExpired);
         builder.Ignore(t => t.IsActive);

@@ -2,6 +2,7 @@ using Application.DTOs.Auth;
 using Application.Services;
 using Domain.Users;
 using Infrastructure.Persistance.Repositories;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.WebUtilities;
 using SharedKernel;
@@ -17,6 +18,7 @@ public sealed class AuthService : IAuthService
     private readonly IAppEmailSender _emailSender;
     private readonly IUnitOfWork _uow;
     private readonly IDateTimeProvider _dateTime;
+    private readonly IHttpContextAccessor _httpContextAccessor;
 
     public AuthService(
         UserManager<User> userManager,
@@ -24,7 +26,8 @@ public sealed class AuthService : IAuthService
         ITokenRepository tokenRepository,
         IAppEmailSender emailSender,
         IUnitOfWork uow,
-        IDateTimeProvider dateTime)
+        IDateTimeProvider dateTime,
+        IHttpContextAccessor httpContextAccessor)
     {
         _userManager = userManager;
         _tokenService = tokenService;
@@ -32,7 +35,14 @@ public sealed class AuthService : IAuthService
         _emailSender = emailSender;
         _uow = uow;
         _dateTime = dateTime;
+        _httpContextAccessor = httpContextAccessor;
     }
+
+    private string? GetClientIp() =>
+        _httpContextAccessor.HttpContext?.Connection.RemoteIpAddress?.ToString();
+
+    private string? GetUserAgent() =>
+        _httpContextAccessor.HttpContext?.Request.Headers.UserAgent.ToString();
 
     public async Task<Result> RegisterAsync(RegisterDto dto)
     {
@@ -85,9 +95,9 @@ public sealed class AuthService : IAuthService
 
         await _userManager.ResetAccessFailedCountAsync(user);
 
+        var newRefreshToken = _tokenService.GenerateRefreshToken(user.Id, GetClientIp(), GetUserAgent());
         var roles = await _userManager.GetRolesAsync(user);
-        var accessToken = await _tokenService.GenerateAccessToken(user, roles);
-        var newRefreshToken = _tokenService.GenerateRefreshToken(user.Id);
+        var accessToken = await _tokenService.GenerateAccessToken(user, roles, newRefreshToken.Id);
 
         // Atomic: update LastLoginUtc and persist the new refresh token together.
         await _uow.BeginTransactionAsync();
@@ -122,9 +132,9 @@ public sealed class AuthService : IAuthService
         if (user is null)
             return Result.Failure<TokenDto>("User account no longer exists");
 
+        var newRefreshToken = _tokenService.GenerateRefreshToken(user.Id, GetClientIp(), GetUserAgent());
         var roles = await _userManager.GetRolesAsync(user);
-        var newAccessToken = await _tokenService.GenerateAccessToken(user, roles);
-        var newRefreshToken = _tokenService.GenerateRefreshToken(user.Id);
+        var newAccessToken = await _tokenService.GenerateAccessToken(user, roles, newRefreshToken.Id);
 
         // Atomic: revoke old token and issue new one in a single transaction.
         await _uow.BeginTransactionAsync();
@@ -226,6 +236,42 @@ public sealed class AuthService : IAuthService
             var errors = string.Join("; ", result.Errors.Select(e => e.Description));
             return Result.Failure(errors);
         }
+
+        return Result.Success();
+    }
+
+    public async Task<Result<List<SessionDto>>> GetSessionsAsync(string userId, Guid? currentSessionId)
+    {
+        var sessions = await _tokenRepository.GetActiveSessionsForUserAsync(userId);
+        var dtos = sessions.Select(t => new SessionDto(
+            t.Id,
+            t.IpAddress,
+            t.UserAgent,
+            t.CreatedAtUtc,
+            t.LastUsedUtc,
+            IsCurrent: t.Id == currentSessionId
+        )).ToList();
+
+        return Result.Success(dtos);
+    }
+
+    public async Task<Result> RevokeSessionAsync(Guid sessionId, string userId)
+    {
+        var token = await _tokenRepository.GetActiveTokenByIdAsync(sessionId, userId);
+        if (token is null)
+            return Result.Failure("Session not found or already revoked");
+
+        token.RevokedAtUtc = _dateTime.UtcNow;
+        await _tokenRepository.UpdateRefreshTokenAsync(token);
+        await _uow.SaveChangesAsync();
+
+        return Result.Success();
+    }
+
+    public async Task<Result> RevokeAllOtherSessionsAsync(string userId, Guid? currentSessionId)
+    {
+        await _tokenRepository.DeleteAllRefreshTokensForUserAsync(userId, excludeId: currentSessionId);
+        await _uow.SaveChangesAsync();
 
         return Result.Success();
     }

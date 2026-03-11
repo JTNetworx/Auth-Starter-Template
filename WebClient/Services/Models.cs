@@ -88,6 +88,17 @@ public record CountryDto(int Id, string Name);
 
 public record PasskeyInfoDto(string CredentialId, string? Name, DateTimeOffset CreatedAt);
 
+// ── Session ───────────────────────────────────────────────────────────────────
+
+public record SessionDto(
+    Guid Id,
+    string? IpAddress,
+    string? UserAgent,
+    DateTime CreatedAtUtc,
+    DateTime? LastUsedUtc,
+    bool IsCurrent
+);
+
 // ── API Result ────────────────────────────────────────────────────────────────
 
 public class ApiResult<T>
