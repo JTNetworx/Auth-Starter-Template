@@ -127,6 +127,12 @@ public sealed class AuthApiService : IAuthApiService
         }
     }
 
+    public async Task StoreTokensAsync(TokenDto tokens)
+    {
+        await _tokenStorage.SetTokensAsync(tokens.AccessToken, tokens.RefreshToken);
+        _authStateProvider.NotifyStateChanged();
+    }
+
     private static async Task<string> ReadErrorAsync(HttpResponseMessage response)
     {
         try

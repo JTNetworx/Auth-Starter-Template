@@ -1,8 +1,10 @@
 @page "/login"
 @layout MainLayout
 @inject IAuthApiService AuthApi
+@inject IPasskeyApiService PasskeyApi
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
+@inject IJSRuntime JS
 
 <PageTitle>Sign In</PageTitle>
 
@@ -46,7 +48,16 @@
                 </MudLink>
             </div>
 
-            @if (!string.IsNullOrEmpty(_errorMessage))
+            @if (_emailNotConfirmed)
+            {
+                <MudAlert Severity="Severity.Warning" Class="mb-4" Dense="true">
+                    Your email address has not been confirmed yet. Check your inbox for the confirmation link.
+                    <MudLink Href="/forgot-password" Color="Color.Warning" Typo="Typo.caption" Class="d-block mt-1">
+                        Did not receive it? Use forgot password to resend.
+                    </MudLink>
+                </MudAlert>
+            }
+            else if (!string.IsNullOrEmpty(_errorMessage))
             {
                 <MudAlert Severity="Severity.Error" Class="mb-4" Dense="true">@_errorMessage</MudAlert>
             }
@@ -71,6 +82,34 @@
         </EditForm>
         </MudFocusTrap>
 
+        @if (_passkeySupported)
+        {
+            <div class="d-flex align-center gap-3 my-2">
+                <MudDivider Style="flex:1" />
+                <MudText Typo="Typo.caption" Color="Color.Secondary">or</MudText>
+                <MudDivider Style="flex:1" />
+            </div>
+
+            <MudButton Variant="Variant.Outlined"
+                       Color="Color.Primary"
+                       FullWidth="true"
+                       Size="Size.Large"
+                       StartIcon="@Icons.Material.Filled.Fingerprint"
+                       Disabled="_passkeyLoading"
+                       OnClick="PasskeyLoginAsync"
+                       Class="mt-3 mb-4">
+                @if (_passkeyLoading)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                    <span>Waiting for passkey...</span>
+                }
+                else
+                {
+                    <span>Sign in with a Passkey</span>
+                }
+            </MudButton>
+        }
+
         <MudDivider Class="my-4" />
 
         <div class="text-center">
@@ -89,11 +128,23 @@
     private EditContext _editContext = null!;
     private bool _loading;
     private bool _showPassword;
+    private bool _emailNotConfirmed;
     private string? _errorMessage;
+    private bool _passkeySupported;
+    private bool _passkeyLoading;
 
     protected override void OnInitialized()
     {
         _editContext = new EditContext(_model);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _passkeySupported = await JS.InvokeAsync<bool>("passkey.isSupported");
+            StateHasChanged();
+        }
     }
 
     private async Task HandleKeyDown(KeyboardEventArgs e)
@@ -112,11 +163,59 @@
 
         if (!result.IsSuccess)
         {
-            _errorMessage = result.Error ?? "Login failed. Please check your credentials.";
+            var error = result.Error ?? "Login failed. Please check your credentials.";
+            if (error.Contains("not been confirmed", StringComparison.OrdinalIgnoreCase))
+                _emailNotConfirmed = true;
+            else
+                _errorMessage = error;
             return;
         }
 
         Snackbar.Add("Welcome back!", Severity.Success);
         Nav.NavigateTo(ReturnUrl ?? "/", replace: true);
+    }
+
+    private async Task PasskeyLoginAsync()
+    {
+        _passkeyLoading = true;
+        _errorMessage = null;
+        _emailNotConfirmed = false;
+
+        try
+        {
+            var beginResult = await PasskeyApi.BeginLoginAsync(_model.UserName);
+            if (!beginResult.IsSuccess)
+            {
+                _errorMessage = beginResult.Error;
+                return;
+            }
+
+            string credentialJson;
+            try
+            {
+                credentialJson = await JS.InvokeAsync<string>("passkey.get", beginResult.Value);
+            }
+            catch (JSException jsEx) when (jsEx.Message.Contains("cancel", StringComparison.OrdinalIgnoreCase)
+                                        || jsEx.Message.Contains("abort", StringComparison.OrdinalIgnoreCase)
+                                        || jsEx.Message.Contains("NotAllowedError", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            var completeResult = await PasskeyApi.CompleteLoginAsync(credentialJson);
+            if (!completeResult.IsSuccess)
+            {
+                _errorMessage = completeResult.Error;
+                return;
+            }
+
+            await AuthApi.StoreTokensAsync(completeResult.Value!);
+            Snackbar.Add("Welcome back!", Severity.Success);
+            Nav.NavigateTo(ReturnUrl ?? "/", replace: true);
+        }
+        finally
+        {
+            _passkeyLoading = false;
+        }
     }
 }

@@ -8,4 +8,5 @@ public interface IAuthApiService
     Task<ApiResult> ForgotPasswordAsync(string email);
     Task<ApiResult> ResetPasswordAsync(ResetPasswordRequest request);
     Task<ApiResult> ChangePasswordAsync(ChangePasswordRequest request);
+    Task StoreTokensAsync(TokenDto tokens);
 }

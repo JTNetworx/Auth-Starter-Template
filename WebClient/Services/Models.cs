@@ -80,6 +80,14 @@ public class UpdateProfileRequest
     public int? CountryId { get; set; }
 }
 
+// ── Country ───────────────────────────────────────────────────────────────────
+
+public record CountryDto(int Id, string Name);
+
+// ── Passkey ───────────────────────────────────────────────────────────────────
+
+public record PasskeyInfoDto(string CredentialId, string? Name, DateTimeOffset CreatedAt);
+
 // ── API Result ────────────────────────────────────────────────────────────────
 
 public class ApiResult<T>

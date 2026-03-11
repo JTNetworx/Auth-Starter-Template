@@ -3,6 +3,8 @@
 @attribute [Authorize]
 @inject IUserApiService UserApi
 @inject IAuthApiService AuthApi
+@inject ICountryApiService CountryApi
+@inject IPasskeyApiService PasskeyApi
 @inject ISnackbar Snackbar
 @inject TokenStorageService TokenStorage
 @inject IJSRuntime JS
@@ -173,6 +175,18 @@ else if (_profile is not null)
                                               Variant="Variant.Outlined"
                                               Disabled="_saving" />
                             </MudItem>
+                            <MudItem xs="12">
+                                <MudSelect T="int?" Label="Country"
+                                           @bind-Value="_editModel.CountryId"
+                                           Variant="Variant.Outlined"
+                                           Clearable="true"
+                                           Disabled="_saving || _loadingCountries">
+                                    @foreach (var c in _countries)
+                                    {
+                                        <MudSelectItem T="int?" Value="@((int?)c.Id)">@c.Name</MudSelectItem>
+                                    }
+                                </MudSelect>
+                            </MudItem>
                         </MudGrid>
 
                         <div class="d-flex justify-end mt-6">
@@ -243,6 +257,73 @@ else if (_profile is not null)
                     </EditForm>
                     </div>
                 </MudTabPanel>
+
+                <MudTabPanel Text="Passkeys" Icon="@Icons.Material.Filled.Fingerprint">
+                    <div class="pa-6 pt-8">
+                        <div class="d-flex align-center justify-space-between mb-4">
+                            <MudText Typo="Typo.subtitle1" Style="font-weight:600">Registered Passkeys</MudText>
+                            <MudButton Variant="Variant.Outlined"
+                                       Color="Color.Primary"
+                                       StartIcon="@Icons.Material.Filled.Add"
+                                       Size="Size.Small"
+                                       Disabled="_passkeyWorking"
+                                       OnClick="AddPasskeyAsync">
+                                Add Passkey
+                            </MudButton>
+                        </div>
+
+                        @if (_passkeyError is not null)
+                        {
+                            <MudAlert Severity="Severity.Error" Class="mb-4" Dense="true">@_passkeyError</MudAlert>
+                        }
+
+                        @if (_loadingPasskeys)
+                        {
+                            <div class="d-flex justify-center pa-6">
+                                <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+                            </div>
+                        }
+                        else if (_passkeys.Count == 0)
+                        {
+                            <MudPaper Elevation="0" Class="pa-6 text-center" Style="border:1px dashed var(--mud-palette-lines-default);">
+                                <MudIcon Icon="@Icons.Material.Filled.Fingerprint" Color="Color.Secondary" Style="font-size:3rem;" />
+                                <MudText Typo="Typo.body1" Color="Color.Secondary" Class="mt-2">No passkeys registered yet.</MudText>
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                    Add a passkey to sign in with Face ID, Touch ID, or a security key.
+                                </MudText>
+                            </MudPaper>
+                        }
+                        else
+                        {
+                            <MudList T="PasskeyInfoDto" Dense="true">
+                                @foreach (var pk in _passkeys)
+                                {
+                                    <MudListItem T="PasskeyInfoDto">
+                                        <div class="d-flex align-center justify-space-between">
+                                            <div class="d-flex align-center gap-3">
+                                                <MudIcon Icon="@Icons.Material.Filled.Key" Color="Color.Primary" />
+                                                <div>
+                                                    <MudText Typo="Typo.body2" Style="font-weight:600">
+                                                        @(pk.Name ?? "Passkey")
+                                                    </MudText>
+                                                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                                        Added @pk.CreatedAt.LocalDateTime.ToString("MMM d, yyyy")
+                                                    </MudText>
+                                                </div>
+                                            </div>
+                                            <MudIconButton Icon="@Icons.Material.Filled.DeleteForever"
+                                                           Color="Color.Error"
+                                                           Size="Size.Small"
+                                                           Disabled="_passkeyWorking"
+                                                           OnClick="@(() => RemovePasskeyAsync(pk.CredentialId))" />
+                                        </div>
+                                    </MudListItem>
+                                    <MudDivider />
+                                }
+                            </MudList>
+                        }
+                    </div>
+                </MudTabPanel>
             </MudTabs>
         </MudItem>
     </MudGrid>
@@ -260,6 +341,14 @@ else if (_profile is not null)
     private bool _showNewPassword;
     private string? _passwordError;
 
+    private List<CountryDto> _countries = [];
+    private bool _loadingCountries;
+
+    private List<PasskeyInfoDto> _passkeys = [];
+    private bool _loadingPasskeys;
+    private bool _passkeyWorking;
+    private string? _passkeyError;
+
     private DateTime? _dateOfBirth
     {
         get => _editModel.DateOfBirth;
@@ -268,6 +357,7 @@ else if (_profile is not null)
 
     protected override async Task OnInitializedAsync()
     {
+        await Task.WhenAll(LoadCountriesAsync(), LoadPasskeysAsync());
         await LoadProfileAsync();
     }
 
@@ -294,8 +384,87 @@ else if (_profile is not null)
             Street2 = _profile.Street2,
             City = _profile.City,
             State = _profile.State,
-            PostalCode = _profile.PostalCode
+            PostalCode = _profile.PostalCode,
+            CountryId = _countries.FirstOrDefault(c => c.Name == _profile.Country)?.Id
         };
+    }
+
+    private async Task LoadCountriesAsync()
+    {
+        _loadingCountries = true;
+        var result = await CountryApi.GetCountriesAsync();
+        _loadingCountries = false;
+        if (result.IsSuccess)
+            _countries = result.Value!;
+    }
+
+    private async Task LoadPasskeysAsync()
+    {
+        _loadingPasskeys = true;
+        var result = await PasskeyApi.GetPasskeysAsync();
+        _loadingPasskeys = false;
+        if (result.IsSuccess)
+            _passkeys = result.Value!;
+    }
+
+    private async Task AddPasskeyAsync()
+    {
+        _passkeyWorking = true;
+        _passkeyError = null;
+
+        try
+        {
+            var beginResult = await PasskeyApi.BeginRegistrationAsync();
+            if (!beginResult.IsSuccess)
+            {
+                _passkeyError = beginResult.Error;
+                return;
+            }
+
+            string credentialJson;
+            try
+            {
+                credentialJson = await JS.InvokeAsync<string>("passkey.create", beginResult.Value);
+            }
+            catch (JSException jsEx) when (jsEx.Message.Contains("cancel", StringComparison.OrdinalIgnoreCase)
+                                        || jsEx.Message.Contains("abort", StringComparison.OrdinalIgnoreCase)
+                                        || jsEx.Message.Contains("NotAllowedError", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            var completeResult = await PasskeyApi.CompleteRegistrationAsync(credentialJson);
+            if (!completeResult.IsSuccess)
+            {
+                _passkeyError = completeResult.Error;
+                return;
+            }
+
+            Snackbar.Add("Passkey registered!", Severity.Success);
+            await LoadPasskeysAsync();
+        }
+        finally
+        {
+            _passkeyWorking = false;
+        }
+    }
+
+    private async Task RemovePasskeyAsync(string credentialId)
+    {
+        _passkeyWorking = true;
+        _passkeyError = null;
+
+        var result = await PasskeyApi.RemovePasskeyAsync(credentialId);
+        _passkeyWorking = false;
+
+        if (!result.IsSuccess)
+        {
+            _passkeyError = result.Error;
+            return;
+        }
+
+        Snackbar.Add("Passkey removed.", Severity.Info);
+        await LoadPasskeysAsync();
     }
 
     private async Task SaveProfileAsync()
