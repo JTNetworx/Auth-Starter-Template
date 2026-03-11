@@ -5,6 +5,9 @@ using Serilog;
 using System.Text;
 using System.Threading.RateLimiting;
 
+// Ensure the logs directory exists before Serilog tries to write to it
+Directory.CreateDirectory(Path.Combine(AppContext.BaseDirectory, "logs"));
+
 Log.Logger = new LoggerConfiguration()
     .WriteTo.Console()
     .CreateBootstrapLogger();
