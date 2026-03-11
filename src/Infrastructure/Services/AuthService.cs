@@ -65,6 +65,8 @@ public sealed class AuthService : IAuthService
             return Result.Failure(errors);
         }
 
+        await _userManager.AddToRoleAsync(user, "User");
+
         // Send confirmation email. Email is best-effort — failure does not fail registration.
         var confirmToken = await _userManager.GenerateEmailConfirmationTokenAsync(user);
         var encodedToken = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(confirmToken));

@@ -32,7 +32,9 @@ public sealed class JwtAuthenticationStateProvider : AuthenticationStateProvider
             return _anonymous;
 
         var claims = ParseClaimsFromJwt(accessToken);
-        var identity = new ClaimsIdentity(claims, "jwt");
+        // "role" is the short claim name written by JwtSecurityTokenHandler; specify it
+        // as the roleClaimType so ClaimsPrincipal.IsInRole and [Authorize(Roles=...)] work.
+        var identity = new ClaimsIdentity(claims, "jwt", nameType: "unique_name", roleType: "role");
         return new AuthenticationState(new ClaimsPrincipal(identity));
     }
 

@@ -57,6 +57,15 @@ else if (_profile is not null)
                         </MudChip>
                     }
 
+                    <AuthorizeView>
+                        <Authorized>
+                            @{ var roleColor = context.User.IsInRole("Admin") ? Color.Error : Color.Primary; }
+                            <MudChip T="string" Color="@roleColor" Size="Size.Small" Icon="@Icons.Material.Filled.Badge">
+                                @(context.User.IsInRole("Admin") ? "Admin" : "User")
+                            </MudChip>
+                        </Authorized>
+                    </AuthorizeView>
+
                     <InputFile id="imageUpload" OnChange="UploadImageAsync" hidden accept="image/jpeg,image/png,image/webp,image/gif" />
                     <MudButton HtmlTag="label"
                                Variant="Variant.Outlined"

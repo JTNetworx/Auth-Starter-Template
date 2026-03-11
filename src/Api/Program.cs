@@ -72,6 +72,8 @@ builder.Services.AddInfrastructureServices(builder.Configuration);
 
 var app = builder.Build();
 
+await Infrastructure.Persistance.DbInitializer.SeedRolesAsync(app.Services);
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();

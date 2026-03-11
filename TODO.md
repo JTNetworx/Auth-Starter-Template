@@ -17,41 +17,19 @@ Legend: ✅ Done · 🔄 In Progress · ⬜ Pending
 - User profile (edit personal info, address, date of birth, phone)
 - Profile photo upload — swappable Database / S3 storage
 - Country selector on profile — wired to `/api/countries`
-- Passkey (WebAuthn) — register, login, list, remove
+- Passkey (WebAuthn) — register, login, list, rename, remove (Fido2NetLib)
 - Email confirmed guard on login page (targeted warning + resend hint)
 - MudBlazor UI — custom theme, dark/light mode persisted to localStorage
 - Responsive drawer layout with AppBar, NotificationBell, AuthHeader avatar menu
 - Clean Architecture — Domain / Application / Infrastructure / SharedKernel / Api / WebClient
+- Session management — IP/UserAgent/LastUsed on RefreshToken, `sid` JWT claim, Sessions tab on Profile
+- Roles — `Admin` + `User` seeded at startup, assigned on register, role badge on Profile
 
 ---
 
-## Phase 1 — Session Management ⬜
+## Phase 3 — Admin Panel ⬜
 
-> Users can see all active sessions and revoke any of them individually.
-
-- [ ] **Backend** — Add `DeviceInfo`, `IpAddress`, `UserAgent`, `LastUsedUtc` columns to `RefreshToken`
-- [ ] **Backend** — EF migration for new columns
-- [ ] **Backend** — Capture metadata at login, passkey login, and token refresh (from `HttpContext`)
-- [ ] **Backend** — `GetActiveTokensForUserAsync(userId)` + `GetTokenByIdAsync(id, userId)` in `ITokenRepository`
-- [ ] **Backend** — `GET /api/users/me/sessions` — list active sessions (exclude current? mark current?) - Mark as current - Allow revoke current session
-- [ ] **Backend** — `DELETE /api/users/me/sessions/{id}` — revoke one session
-- [ ] **Backend** — `DELETE /api/users/me/sessions` — revoke all sessions except current
-- [ ] **Frontend** — `SessionDto` + service methods in `IUserApiService`
-- [ ] **Frontend** — Sessions tab on Profile page — list, revoke individual, "Sign out all other devices"
-
----
-
-## Phase 2 — Roles (Admin + User) ⬜
-
-> Two built-in roles seeded at startup. Developer extends from there.
-
-- [ ] **Backend** — Seed `Admin` and `User` roles at startup via `RoleManager<IdentityRole>`
-- [ ] **Backend** — Assign `User` role to every new registrant in `AuthService.RegisterAsync`
-- [ ] **Backend** — `[Authorize(Roles = "Admin")]` guard on all admin endpoints
-- [ ] **Backend** — `GET /api/users/me` returns current user's roles in JWT claims
-- [ ] **Frontend** — Role claim parsed from JWT in `JwtAuthenticationStateProvider`
-- [ ] **Frontend** — `[Authorize(Roles = "Admin")]` on admin Razor pages
-- [ ] **Frontend** — Admin nav section in `NavMenu.razor` (visible only to Admin role)
+> Admin users can manage users, sessions, roles, and view logs.
 
 ---
 
