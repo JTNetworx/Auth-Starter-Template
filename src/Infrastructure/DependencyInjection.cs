@@ -4,7 +4,9 @@ using Infrastructure.Options;
 using Infrastructure.Persistance;
 using Infrastructure.Persistance.Repositories;
 using Infrastructure.Services;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -66,6 +68,21 @@ public static class DependencyInjection
                     ValidateIssuerSigningKey = true,
                     IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(configuration["Jwt:SecretKey"]!))
                 };
+            });
+
+        // The passkey challenge is stored in Identity's TwoFactor cookie.
+        // Cross-origin Blazor WASM requests require SameSite=None;Secure for
+        // the browser to send this cookie back with the register/complete and login/complete POSTs.
+        services.ConfigureApplicationCookie(o =>
+        {
+            o.Cookie.SameSite = SameSiteMode.None;
+            o.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+        });
+        services.Configure<CookieAuthenticationOptions>(
+            IdentityConstants.TwoFactorUserIdScheme, o =>
+            {
+                o.Cookie.SameSite = SameSiteMode.None;
+                o.Cookie.SecurePolicy = CookieSecurePolicy.Always;
             });
 
         // Passkey Options (ServerDomain defaults to Host header if not set)
