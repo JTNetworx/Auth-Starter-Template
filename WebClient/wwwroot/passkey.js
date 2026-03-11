@@ -20,10 +20,19 @@ window.passkey = {
 
         const credential = await navigator.credentials.get({ publicKey: options });
 
+        // Use toJSON() if available — this is the format .NET Identity expects.
+        if (typeof credential.toJSON === 'function') {
+            return JSON.stringify(credential.toJSON());
+        }
+
+        // Manual fallback
         return JSON.stringify({
             id: credential.id,
             rawId: bufferToBase64Url(credential.rawId),
             type: credential.type,
+            clientExtensionResults: credential.getClientExtensionResults
+                ? credential.getClientExtensionResults()
+                : {},
             response: {
                 authenticatorData: bufferToBase64Url(credential.response.authenticatorData),
                 clientDataJSON: bufferToBase64Url(credential.response.clientDataJSON),
@@ -50,13 +59,25 @@ window.passkey = {
 
         const credential = await navigator.credentials.create({ publicKey: options });
 
+        // Use toJSON() if available — this is the format .NET Identity expects.
+        if (typeof credential.toJSON === 'function') {
+            return JSON.stringify(credential.toJSON());
+        }
+
+        // Manual fallback — includes transports which Identity uses for passkey storage
         return JSON.stringify({
             id: credential.id,
             rawId: bufferToBase64Url(credential.rawId),
             type: credential.type,
+            clientExtensionResults: credential.getClientExtensionResults
+                ? credential.getClientExtensionResults()
+                : {},
             response: {
                 attestationObject: bufferToBase64Url(credential.response.attestationObject),
-                clientDataJSON: bufferToBase64Url(credential.response.clientDataJSON)
+                clientDataJSON: bufferToBase64Url(credential.response.clientDataJSON),
+                transports: credential.response.getTransports
+                    ? credential.response.getTransports()
+                    : []
             }
         });
     }
