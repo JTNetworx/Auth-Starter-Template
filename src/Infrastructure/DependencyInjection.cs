@@ -1,6 +1,7 @@
 using Application.Services;
 using Domain.Users;
 using Fido2NetLib;
+using Infrastructure.Jobs;
 using Infrastructure.Options;
 using Infrastructure.Persistance;
 using Infrastructure.Persistance.Repositories;
@@ -12,7 +13,10 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
+using Quartz;
+using Quartz.Impl.Matchers;
 using SharedKernel;
+using System.Security.Claims;
 using System.Text;
 
 namespace Infrastructure;
@@ -57,6 +61,10 @@ public static class DependencyInjection
         })
             .AddJwtBearer(options =>
             {
+                // Keep original JWT claim names (sub, sid, role, …) instead of remapping
+                // them to WS-Federation URIs. Without this, "sid" → ClaimTypes.Sid (full URI),
+                // breaking User.FindFirstValue("sid") and making GetSessionId() always null.
+                options.MapInboundClaims = false;
                 options.TokenValidationParameters = new TokenValidationParameters
                 {
                     ValidateIssuer = true,
@@ -66,7 +74,37 @@ public static class DependencyInjection
                     ClockSkew = TimeSpan.Zero,
                     ValidateLifetime = true,
                     ValidateIssuerSigningKey = true,
-                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(configuration["Jwt:SecretKey"]!))
+                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(configuration["Jwt:SecretKey"]!)),
+                    // MapInboundClaims = false keeps "role" as-is; tell the authorization
+                    // middleware to use "role" as the role claim type so [Authorize(Roles=...)] works.
+                    RoleClaimType = "role",
+                    NameClaimType = "unique_name"
+                };
+                // Validate the session is still active on every authenticated request.
+                // This makes startup revocation (and admin session revocation) take effect
+                // immediately rather than waiting for the access token to expire.
+                options.Events = new JwtBearerEvents
+                {
+                    OnTokenValidated = async context =>
+                    {
+                        var sid = context.Principal?.FindFirstValue("sid");
+                        if (sid is null || !Guid.TryParse(sid, out var sessionId))
+                        {
+                            context.Fail("Missing or invalid session claim.");
+                            return;
+                        }
+
+                        var db = context.HttpContext.RequestServices
+                            .GetRequiredService<ApplicationDbContext>();
+
+                        var isActive = await db.RefreshTokens
+                            .AnyAsync(t => t.Id == sessionId
+                                       && t.RevokedAtUtc == null
+                                       && t.ExpiresUtc > DateTime.UtcNow);
+
+                        if (!isActive)
+                            context.Fail("Session has been revoked or expired.");
+                    }
                 };
             });
 
@@ -107,6 +145,9 @@ public static class DependencyInjection
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IUserProfileService, UserProfileService>();
         services.AddScoped<IPasskeyService, PasskeyService>();
+        services.AddScoped<IAdminService, AdminService>();
+        services.AddScoped<IAuditLogRepository, AuditLogRepository>();
+        services.AddScoped<IAuditLogService, AuditLogService>();
 
         // EmailSender implements both IEmailSender (low-level transport)
         // and IEmailSender<User> (Identity plumbing for built-in endpoints)
@@ -115,6 +156,43 @@ public static class DependencyInjection
         services.AddScoped<Microsoft.AspNetCore.Identity.IEmailSender<User>>(sp => sp.GetRequiredService<EmailSender>());
 
         services.AddScoped<IAppEmailSender, AppEmailSender>();
+
+        // Quartz background jobs
+        services.Configure<QuartzSettings>(configuration.GetSection(QuartzSettings.SectionName));
+
+        // Job history cache (singleton — survives across requests, cleared on app restart)
+        services.AddSingleton<IJobHistoryCache, JobHistoryCache>();
+        services.AddSingleton<JobAuditListener>();
+
+        var tokenCron = configuration["Quartz:TokenCleanup:CronSchedule"] ?? "0 0 3 * * ?";
+        var auditCron = configuration["Quartz:AuditLogCleanup:CronSchedule"] ?? "0 0 4 * * ?";
+
+        services.AddQuartz(q =>
+        {
+            // Global listener — fires after every job execution (scheduled or manual)
+            q.AddJobListener<JobAuditListener>(GroupMatcher<JobKey>.AnyGroup());
+
+            q.AddJob<ExpiredTokenCleanupJob>(j => j
+                .WithIdentity("ExpiredTokenCleanupJob")
+                .WithDescription("Deletes expired and revoked refresh tokens past the retention window."));
+
+            q.AddTrigger(t => t
+                .ForJob("ExpiredTokenCleanupJob")
+                .WithIdentity("ExpiredTokenCleanupTrigger")
+                .WithCronSchedule(tokenCron));
+
+            q.AddJob<ExpiredAuditLogArchiveJob>(j => j
+                .WithIdentity("ExpiredAuditLogArchiveJob")
+                .WithDescription("Purges audit log records older than the retention window."));
+
+            q.AddTrigger(t => t
+                .ForJob("ExpiredAuditLogArchiveJob")
+                .WithIdentity("ExpiredAuditLogArchiveTrigger")
+                .WithCronSchedule(auditCron));
+        });
+
+        // Gracefully waits for running jobs to finish before the host shuts down.
+        services.AddQuartzHostedService(q => q.WaitForJobsToComplete = true);
 
         return services;
     }

@@ -1,0 +1,237 @@
+@page "/admin/jobs"
+@attribute [Authorize(Roles = "Admin")]
+@layout MainLayout
+@inject IAdminApiService AdminApi
+@inject ISnackbar Snackbar
+
+<PageTitle>Background Jobs</PageTitle>
+
+<MudText Typo="Typo.h5" Class="mb-1">Background Jobs</MudText>
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-6">
+    View scheduled job status and trigger runs on demand.
+    Last-run data is in-memory and resets on app restart; the Audit Logs page has the durable history.
+</MudText>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Class="mb-4" />
+}
+else if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error">@_error</MudAlert>
+}
+else
+{
+    <MudPaper Elevation="2">
+        <MudTable Items="_jobs" Hover="true" Dense="false" Breakpoint="Breakpoint.Sm">
+            <ToolBarContent>
+                <MudText Typo="Typo.subtitle1" Class="mr-auto">Registered Jobs</MudText>
+                <MudTooltip Text="Refresh">
+                    <MudIconButton Icon="@Icons.Material.Filled.Refresh"
+                                   Color="Color.Default"
+                                   Disabled="_loading"
+                                   OnClick="LoadJobsAsync" />
+                </MudTooltip>
+            </ToolBarContent>
+            <HeaderContent>
+                <MudTh>Job</MudTh>
+                <MudTh>Schedule</MudTh>
+                <MudTh>Status</MudTh>
+                <MudTh>Last Run</MudTh>
+                <MudTh>Last Result</MudTh>
+                <MudTh>Next Run</MudTh>
+                <MudTh Style="text-align:right">Actions</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Job">
+                    <MudText Typo="Typo.body2" Style="font-weight:500">@context.Name</MudText>
+                    @if (!string.IsNullOrEmpty(context.Description))
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">@context.Description</MudText>
+                    }
+                </MudTd>
+                <MudTd DataLabel="Schedule">
+                    @if (!string.IsNullOrEmpty(context.CronExpression))
+                    {
+                        <MudText Typo="Typo.body2"><code>@context.CronExpression</code></MudText>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">—</MudText>
+                    }
+                </MudTd>
+                <MudTd DataLabel="Status">
+                    @if (context.IsRunning)
+                    {
+                        <MudChip T="string" Color="Color.Info" Size="Size.Small" Icon="@Icons.Material.Filled.Loop">Running</MudChip>
+                    }
+                    else
+                    {
+                        <MudChip T="string" Color="@GetStateColor(context.TriggerState)" Size="Size.Small">@context.TriggerState</MudChip>
+                    }
+                </MudTd>
+                <MudTd DataLabel="Last Run">
+                    @{
+                        var lastRun = context.LastRunUtc ?? context.PreviousFireTimeUtc;
+                    }
+                    @if (lastRun.HasValue)
+                    {
+                        <MudTooltip Text="@FormatTooltip(lastRun.Value, context.LastRunTriggeredBy)">
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                                <MudText Typo="Typo.body2">@FormatRelative(lastRun.Value)</MudText>
+                                @if (context.LastRunDurationMs.HasValue)
+                                {
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">(@FormatDuration(context.LastRunDurationMs.Value))</MudText>
+                                }
+                                @if (context.LastRunTriggeredBy is not null)
+                                {
+                                    <MudIcon Icon="@Icons.Material.Filled.TouchApp" Size="Size.Small" Color="Color.Primary" Title="Manually triggered" />
+                                }
+                            </MudStack>
+                        </MudTooltip>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Never</MudText>
+                    }
+                </MudTd>
+                <MudTd DataLabel="Last Result">
+                    @if (context.LastRunStatus is not null)
+                    {
+                        <MudTooltip Text="@(context.LastRunDetails ?? context.LastRunStatus)">
+                            <MudStack Spacing="1">
+                                <MudChip T="string"
+                                         Color="@(context.LastRunStatus == "Success" ? Color.Success : Color.Error)"
+                                         Size="Size.Small"
+                                         Icon="@(context.LastRunStatus == "Success" ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Error)">
+                                    @context.LastRunStatus
+                                </MudChip>
+                                @if (!string.IsNullOrEmpty(context.LastRunDetails))
+                                {
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">@context.LastRunDetails</MudText>
+                                }
+                            </MudStack>
+                        </MudTooltip>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">—</MudText>
+                    }
+                </MudTd>
+                <MudTd DataLabel="Next Run">
+                    @if (context.NextFireTimeUtc.HasValue)
+                    {
+                        <MudTooltip Text="@context.NextFireTimeUtc.Value.ToString("u")">
+                            <MudText Typo="Typo.body2">@FormatRelative(context.NextFireTimeUtc.Value)</MudText>
+                        </MudTooltip>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">—</MudText>
+                    }
+                </MudTd>
+                <MudTd DataLabel="Actions" Style="text-align:right">
+                    <MudButton Variant="Variant.Outlined"
+                               Color="Color.Primary"
+                               Size="Size.Small"
+                               StartIcon="@Icons.Material.Filled.PlayArrow"
+                               Disabled="@(context.IsRunning || _triggering == context.Name)"
+                               OnClick="@(async () => await TriggerJobAsync(context.Name))">
+                        @if (_triggering == context.Name)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" />
+                            <span>Starting...</span>
+                        }
+                        else
+                        {
+                            <span>Run Now</span>
+                        }
+                    </MudButton>
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    </MudPaper>
+}
+
+@code {
+    private List<JobStatusDto> _jobs = [];
+    private bool _loading = true;
+    private string? _error;
+    private string? _triggering;
+
+    protected override async Task OnInitializedAsync() => await LoadJobsAsync();
+
+    private async Task LoadJobsAsync()
+    {
+        _loading = true;
+        _error = null;
+        StateHasChanged();
+
+        var result = await AdminApi.GetJobsAsync();
+        if (result.IsSuccess)
+            _jobs = result.Value!;
+        else
+            _error = result.Error;
+
+        _loading = false;
+    }
+
+    private async Task TriggerJobAsync(string jobName)
+    {
+        _triggering = jobName;
+        StateHasChanged();
+
+        var result = await AdminApi.TriggerJobAsync(jobName);
+
+        if (result.IsSuccess)
+        {
+            Snackbar.Add($"'{jobName}' started.", Severity.Success);
+            await Task.Delay(1200);
+            await LoadJobsAsync();
+        }
+        else
+        {
+            Snackbar.Add(result.Error ?? "Failed to trigger job.", Severity.Error);
+        }
+
+        _triggering = null;
+    }
+
+    private static Color GetStateColor(string state) => state switch
+    {
+        "Normal"  => Color.Success,
+        "Paused"  => Color.Warning,
+        "Blocked" => Color.Info,
+        "Error"   => Color.Error,
+        _         => Color.Default
+    };
+
+    private static string FormatTooltip(DateTimeOffset dt, string? triggeredBy)
+    {
+        var who = triggeredBy is not null ? $"Manually by {triggeredBy}" : "Scheduled";
+        return $"{dt:u}  •  {who}";
+    }
+
+    private static string FormatDuration(long ms)
+    {
+        if (ms < 1000)  return $"{ms}ms";
+        if (ms < 60000) return $"{ms / 1000.0:F1}s";
+        return $"{ms / 60000}m {ms % 60000 / 1000}s";
+    }
+
+    private static string FormatRelative(DateTimeOffset dt)
+    {
+        var diff = DateTimeOffset.UtcNow - dt;
+        if (diff < TimeSpan.Zero)
+        {
+            var ahead = -diff;
+            if (ahead.TotalMinutes < 60) return $"in {(int)ahead.TotalMinutes}m";
+            if (ahead.TotalHours < 24)   return $"in {(int)ahead.TotalHours}h";
+            return $"in {(int)ahead.TotalDays}d";
+        }
+        if (diff.TotalSeconds < 60)  return "just now";
+        if (diff.TotalMinutes < 60)  return $"{(int)diff.TotalMinutes}m ago";
+        if (diff.TotalHours < 24)    return $"{(int)diff.TotalHours}h ago";
+        return $"{(int)diff.TotalDays}d ago";
+    }
+}

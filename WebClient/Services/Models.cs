@@ -6,6 +6,25 @@ namespace WebClient.Services;
 
 public record TokenDto(string AccessToken, string RefreshToken);
 
+/// <summary>
+/// Returned by POST /api/auth/login.
+/// When RequiresTwoFactor is true, call POST /api/auth/2fa/verify with UserId + code.
+/// </summary>
+public record LoginResult(bool RequiresTwoFactor, string? UserId, TokenDto? Tokens);
+
+public record TwoFactorSetupInfo(string SharedKey, string AuthenticatorUri, string QrCodeBase64);
+
+public class TwoFactorVerifyRequest
+{
+    public string UserId { get; set; } = string.Empty;
+    [Required][StringLength(8, MinimumLength = 6)] public string Code { get; set; } = string.Empty;
+}
+
+public class TwoFactorCodeRequest
+{
+    [Required][StringLength(8, MinimumLength = 6)] public string Code { get; set; } = string.Empty;
+}
+
 public class LoginRequest
 {
     [Required] public string UserName { get; set; } = string.Empty;
@@ -50,6 +69,7 @@ public class UserProfileDto
     public string UserName { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
     public bool EmailConfirmed { get; set; }
+    public bool TwoFactorEnabled { get; set; }
     public string FirstName { get; set; } = string.Empty;
     public string LastName { get; set; } = string.Empty;
     public string FullName => $"{FirstName} {LastName}".Trim();
@@ -97,6 +117,83 @@ public record SessionDto(
     DateTime CreatedAtUtc,
     DateTime? LastUsedUtc,
     bool IsCurrent
+);
+
+// ── Admin ─────────────────────────────────────────────────────────────────────
+
+public record AdminUserSummaryDto(
+    string Id,
+    string FirstName,
+    string LastName,
+    string Email,
+    bool EmailConfirmed,
+    List<string> Roles,
+    DateTime CreatedAtUtc,
+    DateTime? LastLoginUtc,
+    bool IsLockedOut
+)
+{
+    public string FullName => $"{FirstName} {LastName}".Trim();
+}
+
+public record AdminUserDetailDto(
+    string Id,
+    string FirstName,
+    string LastName,
+    string Email,
+    bool EmailConfirmed,
+    string? PhoneNumber,
+    List<string> Roles,
+    DateTime CreatedAtUtc,
+    DateTime? LastLoginUtc,
+    bool IsLockedOut,
+    List<SessionDto> ActiveSessions
+)
+{
+    public string FullName => $"{FirstName} {LastName}".Trim();
+}
+
+public class PaginatedResult<T>
+{
+    public List<T> Items { get; set; } = [];
+    public int PageNumber { get; set; }
+    public int PageSize { get; set; }
+    public int TotalCount { get; set; }
+    public int TotalPages { get; set; }
+    public bool HasPreviousPage { get; set; }
+    public bool HasNextPage { get; set; }
+}
+
+// ── Background Jobs ───────────────────────────────────────────────────────────
+
+public record JobStatusDto(
+    string Name,
+    string? Description,
+    string TriggerState,
+    DateTimeOffset? NextFireTimeUtc,
+    DateTimeOffset? PreviousFireTimeUtc,
+    string? CronExpression,
+    bool IsRunning,
+    DateTimeOffset? LastRunUtc,
+    string? LastRunStatus,      // "Success" | "Failed" | null (never run this session)
+    string? LastRunDetails,     // e.g. "Deleted 10 refresh token(s)."
+    long? LastRunDurationMs,
+    string? LastRunTriggeredBy);  // null = cron schedule, userId = manual admin trigger
+
+// ── Audit Log ─────────────────────────────────────────────────────────────────
+
+public record AuditLogDto(
+    long Id,
+    string? UserId,
+    string? UserFullName,
+    string? UserName,
+    string Action,
+    string? EntityType,
+    string? EntityId,
+    string? IpAddress,
+    string? UserAgent,
+    DateTime Timestamp,
+    string? Details
 );
 
 // ── API Result ────────────────────────────────────────────────────────────────

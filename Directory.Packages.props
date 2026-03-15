@@ -1,0 +1,92 @@
+<Project>
+
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+  <!-- Microsoft.NET / ASP.NET Core -->
+  <ItemGroup>
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.5" />
+    <PackageVersion Include="Microsoft.AspNetCore.Components.Authorization" Version="10.0.5" />
+    <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.5" />
+    <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="10.0.5" />
+    <PackageVersion Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.5" />
+    <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.5" />
+    <PackageVersion Include="Microsoft.Extensions.Identity.Core" Version="10.0.5" />
+    <PackageVersion Include="Microsoft.Extensions.Identity.Stores" Version="10.0.5" />
+  </ItemGroup>
+
+  <!-- Entity Framework Core -->
+  <ItemGroup>
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.5" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.5" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.5" />
+  </ItemGroup>
+
+  <!-- Vulnerability override: force transitive Microsoft.Bcl.Memory past vulnerable 9.0.0 -->
+  <ItemGroup>
+    <PackageVersion Include="Microsoft.Bcl.Memory" Version="10.0.5" />
+  </ItemGroup>
+
+  <!-- Logging -->
+  <ItemGroup>
+    <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
+    <PackageVersion Include="Serilog.Sinks.File" Version="7.0.0" />
+  </ItemGroup>
+
+  <!-- API / Swagger -->
+  <ItemGroup>
+    <PackageVersion Include="Swashbuckle.AspNetCore" Version="10.1.5" />
+  </ItemGroup>
+
+  <!-- Auth / Passkeys -->
+  <ItemGroup>
+    <PackageVersion Include="Fido2" Version="4.0.0" />
+    <PackageVersion Include="Fido2.AspNet" Version="4.0.0" />
+  </ItemGroup>
+
+  <!-- Email -->
+  <ItemGroup>
+    <PackageVersion Include="MailKit" Version="4.15.1" />
+    <PackageVersion Include="MimeKit" Version="4.15.1" />
+  </ItemGroup>
+
+  <!-- Storage -->
+  <ItemGroup>
+    <PackageVersion Include="AWSSDK.S3" Version="4.0.19" />
+  </ItemGroup>
+
+  <!-- UI -->
+  <ItemGroup>
+    <PackageVersion Include="MudBlazor" Version="9.1.0" />
+  </ItemGroup>
+
+  <!-- Background Jobs -->
+  <ItemGroup>
+    <PackageVersion Include="Quartz" Version="3.13.1" />
+    <PackageVersion Include="Quartz.Extensions.Hosting" Version="3.13.1" />
+  </ItemGroup>
+
+  <!-- QR Code generation (2FA setup) -->
+  <ItemGroup>
+    <PackageVersion Include="QRCoder" Version="1.6.0" />
+  </ItemGroup>
+
+  <!-- Health Checks -->
+  <ItemGroup>
+    <PackageVersion Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="10.0.5" />
+  </ItemGroup>
+
+  <!-- Testing -->
+  <ItemGroup>
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.5" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.5" />
+    <PackageVersion Include="xunit" Version="2.9.3" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.0" />
+    <PackageVersion Include="Moq" Version="4.20.72" />
+    <PackageVersion Include="FluentAssertions" Version="7.2.0" />
+    <PackageVersion Include="coverlet.collector" Version="6.0.4" />
+  </ItemGroup>
+
+</Project>

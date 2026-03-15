@@ -8,12 +8,7 @@
                 }
                 else
                 {
-                    <MudContainer MaxWidth="MaxWidth.Small" Class="mt-16 text-center">
-                        <MudIcon Icon="@Icons.Material.Filled.Lock" Size="Size.Large" Color="Color.Error" />
-                        <MudText Typo="Typo.h5" Class="mt-4">Access Denied</MudText>
-                        <MudText Typo="Typo.body1" Class="mt-2">You do not have permission to view this page.</MudText>
-                        <MudButton Href="/" Variant="Variant.Filled" Color="Color.Primary" Class="mt-6">Go Home</MudButton>
-                    </MudContainer>
+                    <RedirectToForbidden />
                 }
             </NotAuthorized>
         </AuthorizeRouteView>

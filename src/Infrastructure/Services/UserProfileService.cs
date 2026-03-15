@@ -1,3 +1,4 @@
+using Application;
 using Application.DTOs.User;
 using Application.Services;
 using Domain.Users;
@@ -14,17 +15,20 @@ public sealed class UserProfileService : IUserProfileService
     private readonly ApplicationDbContext _dbContext;
     private readonly IProfileImageStore _profileImageStore;
     private readonly IDateTimeProvider _dateTime;
+    private readonly IAuditLogService _audit;
 
     public UserProfileService(
         UserManager<User> userManager,
         ApplicationDbContext dbContext,
         IProfileImageStore profileImageStore,
-        IDateTimeProvider dateTime)
+        IDateTimeProvider dateTime,
+        IAuditLogService audit)
     {
         _userManager = userManager;
         _dbContext = dbContext;
         _profileImageStore = profileImageStore;
         _dateTime = dateTime;
+        _audit = audit;
     }
 
     public async Task<Result<UserProfileDto>> GetProfileAsync(string userId)
@@ -37,6 +41,7 @@ public sealed class UserProfileService : IUserProfileService
                 UserName = u.UserName ?? string.Empty,
                 Email = u.Email ?? string.Empty,
                 EmailConfirmed = u.EmailConfirmed,
+                TwoFactorEnabled = u.TwoFactorEnabled,
                 FirstName = u.FirstName,
                 LastName = u.LastName,
                 PhoneNumber = u.PhoneNumber,
@@ -84,6 +89,7 @@ public sealed class UserProfileService : IUserProfileService
             return Result.Failure<UserProfileDto>(errors);
         }
 
+        await _audit.RecordAsync(userId, AuditActions.ProfileUpdated);
         return await GetProfileAsync(userId);
     }
 
@@ -131,4 +137,91 @@ public sealed class UserProfileService : IUserProfileService
 
     public Task<(byte[] Data, string ContentType)?> GetProfileImageBytesAsync(string userId) =>
         _profileImageStore.GetAsync(userId);
+
+    public async Task<Result> DeleteAccountAsync(string userId)
+    {
+        var user = await _userManager.FindByIdAsync(userId);
+        if (user is null)
+            return Result.Failure("User not found");
+
+        // Audit before deletion — UserId on the record will be set to NULL by DB cascade
+        await _audit.RecordAsync(userId, AuditActions.AccountDeleted, entityType: "User", entityId: userId);
+
+        // Delete refresh tokens (UserTokens table)
+        await _dbContext.RefreshTokens
+            .Where(t => t.UserId == userId)
+            .ExecuteDeleteAsync();
+
+        // Delete passkey credentials
+        await _dbContext.PasskeyCredentials
+            .Where(p => p.UserId == userId)
+            .ExecuteDeleteAsync();
+
+        // Delete profile image from backing store
+        await _profileImageStore.DeleteAsync(userId);
+
+        // Delete the Identity user — cascades AspNetUserRoles, AspNetUserClaims, etc.
+        // AuditLog.UserId is set to NULL automatically via DeleteBehavior.SetNull on the FK.
+        var result = await _userManager.DeleteAsync(user);
+        if (!result.Succeeded)
+        {
+            var errors = string.Join("; ", result.Errors.Select(e => e.Description));
+            return Result.Failure(errors);
+        }
+
+        return Result.Success();
+    }
+
+    public async Task<Result<AccountExportDto>> ExportDataAsync(string userId)
+    {
+        var user = await _dbContext.Users
+            .Include(u => u.Country)
+            .FirstOrDefaultAsync(u => u.Id == userId);
+
+        if (user is null)
+            return Result.Failure<AccountExportDto>("User not found");
+
+        var profile = new ProfileExport(
+            user.Id,
+            user.UserName ?? string.Empty,
+            user.Email ?? string.Empty,
+            user.EmailConfirmed,
+            user.TwoFactorEnabled,
+            user.FirstName,
+            user.LastName,
+            user.PhoneNumber,
+            user.DateOfBirth,
+            user.Street,
+            user.Street2,
+            user.City,
+            user.State,
+            user.PostalCode,
+            user.Country?.Name,
+            user.CreatedAtUtc,
+            user.LastLoginUtc);
+
+        var sessions = await _dbContext.RefreshTokens
+            .Where(t => t.UserId == userId
+                     && t.RevokedAtUtc == null
+                     && t.ExpiresUtc > DateTime.UtcNow)
+            .OrderByDescending(t => t.LastUsedUtc)
+            .Select(t => new SessionExport(t.Id, t.CreatedAtUtc, t.IpAddress, t.UserAgent, t.LastUsedUtc))
+            .ToListAsync();
+
+        var passkeys = await _dbContext.PasskeyCredentials
+            .Where(p => p.UserId == userId)
+            .OrderBy(p => p.CreatedAt)
+            .Select(p => new PasskeyExport(p.Name ?? "Passkey", p.CreatedAt.UtcDateTime))
+            .ToListAsync();
+
+        var auditHistory = await _dbContext.AuditLogs
+            .Where(l => l.UserId == userId)
+            .OrderByDescending(l => l.Timestamp)
+            .Select(l => new AuditLogExport(l.Action, l.EntityType, l.Timestamp, l.IpAddress, l.Details))
+            .ToListAsync();
+
+        await _audit.RecordAsync(userId, AuditActions.AccountDataExported);
+
+        return Result.Success(new AccountExportDto(profile, sessions, passkeys, auditHistory, DateTimeOffset.UtcNow));
+    }
 }

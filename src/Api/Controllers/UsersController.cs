@@ -9,6 +9,7 @@ namespace Api.Controllers;
 [Authorize]
 [Route("api/[controller]")]
 [ApiController]
+[Produces("application/json")]
 public class UsersController : ControllerBase
 {
     private static readonly string[] AllowedImageTypes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
@@ -26,6 +27,9 @@ public class UsersController : ControllerBase
     /// <summary>
     /// Returns the full profile of the currently authenticated user.
     /// </summary>
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     [HttpGet("me")]
     public async Task<IActionResult> GetMeAsync()
     {
@@ -41,6 +45,9 @@ public class UsersController : ControllerBase
     /// <summary>
     /// Updates the profile of the currently authenticated user.
     /// </summary>
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [HttpPut("me")]
     public async Task<IActionResult> UpdateMeAsync([FromBody] UpdateUserProfileDto dto)
     {
@@ -57,6 +64,9 @@ public class UsersController : ControllerBase
     /// Uploads a new profile image for the currently authenticated user.
     /// Accepted: JPEG, PNG, WebP, GIF — max 5 MB.
     /// </summary>
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [HttpPut("me/profile-image")]
     [RequestSizeLimit(MaxImageSizeBytes)]
     public async Task<IActionResult> UploadProfileImageAsync(IFormFile file)
@@ -84,6 +94,9 @@ public class UsersController : ControllerBase
     /// <summary>
     /// Deletes the profile image of the currently authenticated user.
     /// </summary>
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [HttpDelete("me/profile-image")]
     public async Task<IActionResult> DeleteProfileImageAsync()
     {
@@ -102,6 +115,8 @@ public class UsersController : ControllerBase
     /// Only used when App:ProfileImageStorage = "Database".
     /// </summary>
     [AllowAnonymous]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     [HttpGet("{userId}/profile-image")]
     public async Task<IActionResult> GetProfileImageAsync(string userId)
     {
@@ -116,6 +131,8 @@ public class UsersController : ControllerBase
     /// Returns all active sessions for the current user.
     /// The current session is identified via the 'sid' claim in the JWT.
     /// </summary>
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [HttpGet("me/sessions")]
     public async Task<IActionResult> GetSessionsAsync()
     {
@@ -132,6 +149,9 @@ public class UsersController : ControllerBase
     /// <summary>
     /// Revokes a single session by its ID.
     /// </summary>
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [HttpDelete("me/sessions/{sessionId:guid}")]
     public async Task<IActionResult> RevokeSessionAsync(Guid sessionId)
     {
@@ -147,6 +167,9 @@ public class UsersController : ControllerBase
     /// <summary>
     /// Revokes all sessions except the current one.
     /// </summary>
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [HttpDelete("me/sessions")]
     public async Task<IActionResult> RevokeAllOtherSessionsAsync()
     {
@@ -158,6 +181,44 @@ public class UsersController : ControllerBase
         if (result.IsFailure) return BadRequest(new { result.Error });
 
         return NoContent();
+    }
+
+    /// <summary>
+    /// Hard-deletes the current user's account and all associated personal data.
+    /// </summary>
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [HttpDelete("me")]
+    public async Task<IActionResult> DeleteAccountAsync()
+    {
+        var userId = GetUserId();
+        if (userId is null) return Unauthorized();
+
+        var result = await _userProfileService.DeleteAccountAsync(userId);
+        if (result.IsFailure) return BadRequest(new { result.Error });
+
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Returns a full export of the current user's personal data as a JSON file.
+    /// </summary>
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [HttpGet("me/export")]
+    public async Task<IActionResult> ExportDataAsync()
+    {
+        var userId = GetUserId();
+        if (userId is null) return Unauthorized();
+
+        var result = await _userProfileService.ExportDataAsync(userId);
+        if (result.IsFailure) return BadRequest(new { result.Error });
+
+        var json = System.Text.Json.JsonSerializer.Serialize(result.Value, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+        var bytes = System.Text.Encoding.UTF8.GetBytes(json);
+        return File(bytes, "application/json", "account-export.json");
     }
 
     private string? GetUserId() =>

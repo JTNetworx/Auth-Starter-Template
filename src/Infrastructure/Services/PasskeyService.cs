@@ -1,3 +1,4 @@
+using Application;
 using Application.DTOs.Auth;
 using Application.Services;
 using Domain.Users;
@@ -26,6 +27,7 @@ public sealed class PasskeyService : IPasskeyService
     private readonly IUnitOfWork _uow;
     private readonly IDateTimeProvider _dateTime;
     private readonly IHttpContextAccessor _httpContextAccessor;
+    private readonly IAuditLogService _audit;
 
     private const string RegPrefix = "passkey:reg:";
     private const string LoginPrefix = "passkey:login:";
@@ -40,7 +42,8 @@ public sealed class PasskeyService : IPasskeyService
         ITokenRepository tokenRepository,
         IUnitOfWork uow,
         IDateTimeProvider dateTime,
-        IHttpContextAccessor httpContextAccessor)
+        IHttpContextAccessor httpContextAccessor,
+        IAuditLogService audit)
     {
         _fido2 = fido2;
         _cache = cache;
@@ -51,6 +54,7 @@ public sealed class PasskeyService : IPasskeyService
         _uow = uow;
         _dateTime = dateTime;
         _httpContextAccessor = httpContextAccessor;
+        _audit = audit;
     }
 
     private string? GetClientIp() =>
@@ -182,6 +186,7 @@ public sealed class PasskeyService : IPasskeyService
         });
 
         await _uow.SaveChangesAsync();
+        await _audit.RecordAsync(user.Id, AuditActions.PasskeyAdded, entityType: "PasskeyCredential");
         return Result.Success();
     }
 
@@ -284,6 +289,10 @@ public sealed class PasskeyService : IPasskeyService
         if (!user.EmailConfirmed)
             return Result.Failure<TokenDto>("Email address has not been confirmed");
 
+        // Passkeys satisfy MFA on their own (FIDO2 + user verification = something you have +
+        // something you are/know). TOTP is not required on top — it would add a weaker,
+        // phishable factor over a phishing-resistant one. Issue tokens directly.
+
         user.LastLoginUtc = _dateTime.UtcNow;
         await _userManager.UpdateAsync(user);
 
@@ -292,6 +301,7 @@ public sealed class PasskeyService : IPasskeyService
         var accessToken = await _tokenService.GenerateAccessToken(user, roles, refreshToken.Id);
         await _tokenRepository.SaveRefreshTokenAsync(refreshToken);
         await _uow.SaveChangesAsync();
+        await _audit.RecordAsync(user.Id, AuditActions.LoginSuccess);
 
         return Result.Success(new TokenDto(accessToken, refreshToken.Token));
     }
@@ -347,6 +357,7 @@ public sealed class PasskeyService : IPasskeyService
 
         _db.PasskeyCredentials.Remove(cred);
         await _uow.SaveChangesAsync();
+        await _audit.RecordAsync(userId, AuditActions.PasskeyRemoved, entityType: "PasskeyCredential");
 
         return Result.Success();
     }

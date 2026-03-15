@@ -10,120 +10,186 @@
 
 <MudContainer MaxWidth="MaxWidth.Small" Class="mt-8">
     <MudPaper Elevation="3" Class="pa-8">
-        <div class="text-center mb-6">
-            <MudIcon Icon="@Icons.Material.Filled.Lock" Color="Color.Primary" Size="Size.Large" />
-            <MudText Typo="Typo.h5" Class="mt-2" Style="font-weight:600">Welcome Back</MudText>
-            <MudText Typo="Typo.body2" Color="Color.Secondary">Sign in to your account</MudText>
-        </div>
 
-        <MudFocusTrap DefaultFocus="DefaultFocus.FirstChild">
-        <EditForm EditContext="@_editContext" OnValidSubmit="SubmitAsync" @onkeydown="HandleKeyDown">
-            <DataAnnotationsValidator />
-
-            <MudTextField Label="Username"
-                          @bind-Value="_model.UserName"
-                          For="@(() => _model.UserName)"
-                          Variant="Variant.Outlined"
-                          Adornment="Adornment.Start"
-                          AdornmentIcon="@Icons.Material.Filled.Person"
-                          Class="mb-4"
-                          Disabled="_loading"
-                          autocomplete="username" />
-
-            <MudTextField Label="Password"
-                          @bind-Value="_model.Password"
-                          For="@(() => _model.Password)"
-                          Variant="Variant.Outlined"
-                          InputType="@(_showPassword ? InputType.Text : InputType.Password)"
-                          Adornment="Adornment.End"
-                          AdornmentIcon="@(_showPassword ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
-                          OnAdornmentClick="@(() => _showPassword = !_showPassword)"
-                          Class="mb-2"
-                          Disabled="_loading"
-                          autocomplete="current-password" />
-
-            <div class="text-right mb-4">
-                <MudLink Href="/forgot-password" Typo="Typo.caption" Color="Color.Primary">
-                    Forgot password?
-                </MudLink>
-            </div>
-
-            @if (_emailNotConfirmed)
-            {
-                <MudAlert Severity="Severity.Warning" Class="mb-4" Dense="true">
-                    Your email address has not been confirmed yet. Check your inbox for the confirmation link.
-                    <MudLink Href="/forgot-password" Color="Color.Warning" Typo="Typo.caption" Class="d-block mt-1">
-                        Did not receive it? Use forgot password to resend.
-                    </MudLink>
-                </MudAlert>
-            }
-            else if (!string.IsNullOrEmpty(_errorMessage))
-            {
-                <MudAlert Severity="Severity.Error" Class="mb-4" Dense="true">@_errorMessage</MudAlert>
-            }
-
-            <MudButton ButtonType="ButtonType.Submit"
-                       Variant="Variant.Filled"
-                       Color="Color.Primary"
-                       FullWidth="true"
-                       Size="Size.Large"
-                       Disabled="_loading"
-                       Class="mb-4">
-                @if (_loading)
-                {
-                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
-                    <span>Signing in...</span>
-                }
-                else
-                {
-                    <span>Sign In</span>
-                }
-            </MudButton>
-        </EditForm>
-        </MudFocusTrap>
-
-        @if (_passkeySupported)
+        @if (!_requiresTwoFactor)
         {
-            <div class="d-flex align-center gap-3 my-2">
-                <MudDivider Style="flex:1" />
-                <MudText Typo="Typo.caption" Color="Color.Secondary">or</MudText>
-                <MudDivider Style="flex:1" />
+            <div class="text-center mb-6">
+                <MudIcon Icon="@Icons.Material.Filled.Lock" Color="Color.Primary" Size="Size.Large" />
+                <MudText Typo="Typo.h5" Class="mt-2" Style="font-weight:600">Welcome Back</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">Sign in to your account</MudText>
             </div>
 
-            <MudButton Variant="Variant.Outlined"
-                       Color="Color.Primary"
-                       FullWidth="true"
-                       Size="Size.Large"
-                       StartIcon="@Icons.Material.Filled.Fingerprint"
-                       Disabled="_passkeyLoading"
-                       OnClick="PasskeyLoginAsync"
-                       Class="mt-3 mb-4">
-                @if (_passkeyLoading)
+            <MudFocusTrap DefaultFocus="DefaultFocus.FirstChild">
+            <EditForm EditContext="@_editContext" OnValidSubmit="SubmitAsync" @onkeydown="HandleKeyDown">
+                <DataAnnotationsValidator />
+
+                <MudTextField Label="Username"
+                              @bind-Value="_model.UserName"
+                              For="@(() => _model.UserName)"
+                              Variant="Variant.Outlined"
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Person"
+                              Class="mb-4"
+                              Disabled="_loading"
+                              autocomplete="username" />
+
+                <MudTextField Label="Password"
+                              @bind-Value="_model.Password"
+                              For="@(() => _model.Password)"
+                              Variant="Variant.Outlined"
+                              InputType="@(_showPassword ? InputType.Text : InputType.Password)"
+                              Adornment="Adornment.End"
+                              AdornmentIcon="@(_showPassword ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
+                              OnAdornmentClick="@(() => _showPassword = !_showPassword)"
+                              Class="mb-2"
+                              Disabled="_loading"
+                              autocomplete="current-password" />
+
+                <div class="text-right mb-4">
+                    <MudLink Href="/forgot-password" Typo="Typo.caption" Color="Color.Primary">
+                        Forgot password?
+                    </MudLink>
+                </div>
+
+                @if (_emailNotConfirmed)
                 {
-                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
-                    <span>Waiting for passkey...</span>
+                    <MudAlert Severity="Severity.Warning" Class="mb-4" Dense="true">
+                        Your email address has not been confirmed yet. Check your inbox for the confirmation link.
+                        <MudLink Href="/forgot-password" Color="Color.Warning" Typo="Typo.caption" Class="d-block mt-1">
+                            Did not receive it? Use forgot password to resend.
+                        </MudLink>
+                    </MudAlert>
                 }
-                else
+                else if (!string.IsNullOrEmpty(_errorMessage))
                 {
-                    <span>Sign in with a Passkey</span>
+                    <MudAlert Severity="Severity.Error" Class="mb-4" Dense="true">@_errorMessage</MudAlert>
                 }
-            </MudButton>
+
+                <MudButton ButtonType="ButtonType.Submit"
+                           Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           FullWidth="true"
+                           Size="Size.Large"
+                           Disabled="_loading"
+                           Class="mb-4">
+                    @if (_loading)
+                    {
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                        <span>Signing in...</span>
+                    }
+                    else
+                    {
+                        <span>Sign In</span>
+                    }
+                </MudButton>
+            </EditForm>
+            </MudFocusTrap>
+
+            @if (_passkeySupported)
+            {
+                <div class="d-flex align-center gap-3 my-2">
+                    <MudDivider Style="flex:1" />
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">or</MudText>
+                    <MudDivider Style="flex:1" />
+                </div>
+
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Primary"
+                           FullWidth="true"
+                           Size="Size.Large"
+                           StartIcon="@Icons.Material.Filled.Fingerprint"
+                           Disabled="_passkeyLoading"
+                           OnClick="PasskeyLoginAsync"
+                           Class="mt-3 mb-4">
+                    @if (_passkeyLoading)
+                    {
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                        <span>Waiting for passkey...</span>
+                    }
+                    else
+                    {
+                        <span>Sign in with a Passkey</span>
+                    }
+                </MudButton>
+            }
+
+            <MudDivider Class="my-4" />
+
+            <div class="text-center">
+                <MudText Typo="Typo.body2">
+                    Don't have an account?
+                    <MudLink Href="/register" Color="Color.Primary">Create one</MudLink>
+                </MudText>
+            </div>
+        }
+        else
+        {
+            @* ── Two-Factor Challenge ──────────────────────────────────────────── *@
+            <div class="text-center mb-6">
+                <MudIcon Icon="@Icons.Material.Filled.PhonelinkLock" Color="Color.Primary" Size="Size.Large" />
+                <MudText Typo="Typo.h5" Class="mt-2" Style="font-weight:600">Two-Factor Authentication</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                    Enter the 6-digit code from your authenticator app
+                </MudText>
+            </div>
+
+            <MudFocusTrap DefaultFocus="DefaultFocus.FirstChild">
+            <EditForm EditContext="@_tfaEditContext" OnValidSubmit="VerifyTwoFactorAsync" @onkeydown="HandleTfaKeyDown">
+                <DataAnnotationsValidator />
+
+                <MudTextField Label="Verification Code"
+                              @bind-Value="_tfaModel.Code"
+                              For="@(() => _tfaModel.Code)"
+                              Variant="Variant.Outlined"
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Pin"
+                              Class="mb-4"
+                              Disabled="_loading"
+                              InputType="InputType.Number"
+                              autocomplete="one-time-code" />
+
+                @if (!string.IsNullOrEmpty(_errorMessage))
+                {
+                    <MudAlert Severity="Severity.Error" Class="mb-4" Dense="true">@_errorMessage</MudAlert>
+                }
+
+                <MudButton ButtonType="ButtonType.Submit"
+                           Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           FullWidth="true"
+                           Size="Size.Large"
+                           Disabled="_loading"
+                           Class="mb-4">
+                    @if (_loading)
+                    {
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                        <span>Verifying...</span>
+                    }
+                    else
+                    {
+                        <span>Verify</span>
+                    }
+                </MudButton>
+            </EditForm>
+            </MudFocusTrap>
+
+            <div class="text-center">
+                <MudButton Variant="Variant.Text"
+                           Color="Color.Secondary"
+                           Size="Size.Small"
+                           OnClick="BackToLogin">
+                    Back to sign in
+                </MudButton>
+            </div>
         }
 
-        <MudDivider Class="my-4" />
-
-        <div class="text-center">
-            <MudText Typo="Typo.body2">
-                Don't have an account?
-                <MudLink Href="/register" Color="Color.Primary">Create one</MudLink>
-            </MudText>
-        </div>
     </MudPaper>
 </MudContainer>
 
 @code {
     [SupplyParameterFromQuery] public string? ReturnUrl { get; set; }
 
+    // ── Step 1: Password login ────────────────────────────────────────────────
     private readonly LoginRequest _model = new();
     private EditContext _editContext = null!;
     private bool _loading;
@@ -133,9 +199,16 @@
     private bool _passkeySupported;
     private bool _passkeyLoading;
 
+    // ── Step 2: 2FA challenge ─────────────────────────────────────────────────
+    private bool _requiresTwoFactor;
+    private string? _pendingUserId;
+    private readonly TwoFactorVerifyRequest _tfaModel = new();
+    private EditContext _tfaEditContext = null!;
+
     protected override void OnInitialized()
     {
         _editContext = new EditContext(_model);
+        _tfaEditContext = new EditContext(_tfaModel);
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -153,10 +226,17 @@
             await SubmitAsync();
     }
 
+    private async Task HandleTfaKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !_loading && _tfaEditContext.Validate())
+            await VerifyTwoFactorAsync();
+    }
+
     private async Task SubmitAsync()
     {
         _loading = true;
         _errorMessage = null;
+        _emailNotConfirmed = false;
 
         var result = await AuthApi.LoginAsync(_model);
         _loading = false;
@@ -171,8 +251,44 @@
             return;
         }
 
+        var loginResult = result.Value!;
+
+        if (loginResult.RequiresTwoFactor)
+        {
+            _pendingUserId = loginResult.UserId;
+            _tfaModel.UserId = _pendingUserId ?? string.Empty;
+            _requiresTwoFactor = true;
+            return;
+        }
+
         Snackbar.Add("Welcome back!", Severity.Success);
         Nav.NavigateTo(ReturnUrl ?? "/", replace: true);
+    }
+
+    private async Task VerifyTwoFactorAsync()
+    {
+        _loading = true;
+        _errorMessage = null;
+
+        var result = await AuthApi.VerifyTwoFactorAsync(_tfaModel);
+        _loading = false;
+
+        if (!result.IsSuccess)
+        {
+            _errorMessage = result.Error ?? "Invalid code. Please try again.";
+            return;
+        }
+
+        Snackbar.Add("Welcome back!", Severity.Success);
+        Nav.NavigateTo(ReturnUrl ?? "/", replace: true);
+    }
+
+    private void BackToLogin()
+    {
+        _requiresTwoFactor = false;
+        _pendingUserId = null;
+        _tfaModel.Code = string.Empty;
+        _errorMessage = null;
     }
 
     private async Task PasskeyLoginAsync()

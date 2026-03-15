@@ -1,0 +1,39 @@
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      SA_PASSWORD: "DevPassword1!"
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: "Developer"
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+    healthcheck:
+      test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'DevPassword1!' -Q 'SELECT 1' -No || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=AuthStarterTemplate;User Id=sa;Password=DevPassword1!;TrustServerCertificate=true;MultipleActiveResultSets=true
+      - Jwt__SecretKey=change-me-to-at-least-32-bytes-long-secret-key!!
+      - Jwt__Issuer=AuthStarterApi
+      - Jwt__Audience=AuthStarterClient
+      - Jwt__ExpirationMinutes=15
+      - Jwt__ExpirationDays=7
+      - AllowedOrigins__0=http://localhost:5000
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+
+volumes:
+  sqlserver_data:

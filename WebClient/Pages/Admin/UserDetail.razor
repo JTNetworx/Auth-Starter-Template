@@ -1,0 +1,318 @@
+@page "/admin/users/{UserId}"
+@layout MainLayout
+@attribute [Authorize(Roles = "Admin")]
+@using Microsoft.AspNetCore.Authorization
+@inject IAdminApiService AdminApi
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+
+<PageTitle>Admin — User Detail</PageTitle>
+
+@if (_loading)
+{
+    <div class="d-flex justify-center pa-12">
+        <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+    </div>
+}
+else if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error">@_error</MudAlert>
+}
+else if (_user is not null)
+{
+    <div class="d-flex align-center gap-3 mb-6">
+        <MudIconButton Icon="@Icons.Material.Filled.ArrowBack"
+                       Href="/admin/users"
+                       Variant="Variant.Text" />
+        <div>
+            <MudText Typo="Typo.h5" Style="font-weight:600">@_user.FullName</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">@_user.Email</MudText>
+        </div>
+        @if (_user.IsLockedOut)
+        {
+            <MudChip T="string" Color="Color.Error" Icon="@Icons.Material.Filled.Lock" Class="ml-2">Locked Out</MudChip>
+        }
+        else
+        {
+            <MudChip T="string" Color="Color.Success" Icon="@Icons.Material.Filled.CheckCircle" Class="ml-2">Active</MudChip>
+        }
+    </div>
+
+    <MudGrid Spacing="4">
+
+        @* ── Account Info ──────────────────────────────────────────────────────── *@
+        <MudItem xs="12" md="4">
+            <MudPaper Elevation="2" Class="pa-5">
+                <MudText Typo="Typo.subtitle1" Style="font-weight:600" Class="mb-3">Account Info</MudText>
+                <MudList T="string" Dense="true" DisablePadding="true">
+                    <MudListItem T="string" Icon="@Icons.Material.Filled.Email">
+                        <div>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">Email</MudText>
+                            <div class="d-flex align-center gap-1">
+                                <MudText Typo="Typo.body2">@_user.Email</MudText>
+                                @if (_user.EmailConfirmed)
+                                {
+                                    <MudIcon Icon="@Icons.Material.Filled.Verified"
+                                             Size="Size.Small" Color="Color.Success" />
+                                }
+                                else
+                                {
+                                    <MudChip T="string" Color="Color.Warning" Size="Size.Small" Class="my-0">Unconfirmed</MudChip>
+                                }
+                            </div>
+                        </div>
+                    </MudListItem>
+                    @if (!string.IsNullOrWhiteSpace(_user.PhoneNumber))
+                    {
+                        <MudListItem T="string" Icon="@Icons.Material.Filled.Phone">
+                            <div>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">Phone</MudText>
+                                <MudText Typo="Typo.body2">@_user.PhoneNumber</MudText>
+                            </div>
+                        </MudListItem>
+                    }
+                    <MudListItem T="string" Icon="@Icons.Material.Filled.CalendarToday">
+                        <div>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">Joined</MudText>
+                            <MudText Typo="Typo.body2">@_user.CreatedAtUtc.ToLocalTime().ToString("f")</MudText>
+                        </div>
+                    </MudListItem>
+                    <MudListItem T="string" Icon="@Icons.Material.Filled.Login">
+                        <div>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">Last Login</MudText>
+                            <MudText Typo="Typo.body2">
+                                @(_user.LastLoginUtc.HasValue
+                                    ? _user.LastLoginUtc.Value.ToLocalTime().ToString("f")
+                                    : "Never")
+                            </MudText>
+                        </div>
+                    </MudListItem>
+                </MudList>
+            </MudPaper>
+        </MudItem>
+
+        @* ── Roles ─────────────────────────────────────────────────────────────── *@
+        <MudItem xs="12" md="8">
+            <MudPaper Elevation="2" Class="pa-5">
+                <MudText Typo="Typo.subtitle1" Style="font-weight:600" Class="mb-3">Roles</MudText>
+
+                @if (_roleError is not null)
+                {
+                    <MudAlert Severity="Severity.Error" Dense="true" Class="mb-3">@_roleError</MudAlert>
+                }
+
+                <div class="d-flex flex-wrap gap-2 mb-4">
+                    @foreach (var role in _user.Roles)
+                    {
+                        <MudChip T="string"
+                                 Color="@(role == "Admin" ? Color.Error : Color.Primary)"
+                                 OnClose="@(() => RemoveRoleAsync(role))"
+                                 Disabled="_roleWorking">
+                            @role
+                        </MudChip>
+                    }
+                    @if (_user.Roles.Count == 0)
+                    {
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">No roles assigned.</MudText>
+                    }
+                </div>
+
+                <MudDivider Class="mb-4" />
+                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-2">Assign a role:</MudText>
+                <div class="d-flex gap-2 flex-wrap">
+                    @foreach (var role in _availableRoles.Where(r => !_user.Roles.Contains(r)))
+                    {
+                        <MudButton Variant="Variant.Outlined"
+                                   Size="Size.Small"
+                                   StartIcon="@Icons.Material.Filled.Add"
+                                   Disabled="_roleWorking"
+                                   OnClick="@(() => AssignRoleAsync(role))">
+                            @role
+                        </MudButton>
+                    }
+                </div>
+            </MudPaper>
+        </MudItem>
+
+        @* ── Active Sessions ───────────────────────────────────────────────────── *@
+        <MudItem xs="12">
+            <MudPaper Elevation="2" Class="pa-5">
+                <div class="d-flex align-center justify-space-between mb-3">
+                    <MudText Typo="Typo.subtitle1" Style="font-weight:600">
+                        Active Sessions (@_user.ActiveSessions.Count)
+                    </MudText>
+                    @if (_user.ActiveSessions.Count > 0)
+                    {
+                        <MudButton Variant="Variant.Outlined"
+                                   Color="Color.Error"
+                                   Size="Size.Small"
+                                   StartIcon="@Icons.Material.Filled.Logout"
+                                   Disabled="_sessionWorking"
+                                   OnClick="RevokeAllSessionsAsync">
+                            Sign Out All Devices
+                        </MudButton>
+                    }
+                </div>
+
+                @if (_sessionError is not null)
+                {
+                    <MudAlert Severity="Severity.Error" Dense="true" Class="mb-3">@_sessionError</MudAlert>
+                }
+
+                @if (_user.ActiveSessions.Count == 0)
+                {
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">No active sessions.</MudText>
+                }
+                else
+                {
+                    <MudList T="SessionDto" Dense="false">
+                        @foreach (var (session, index) in _user.ActiveSessions.Select((s, i) => (s, i)))
+                        {
+                            <MudListItem T="SessionDto">
+                                <div class="d-flex align-center justify-space-between gap-3">
+                                    <div class="d-flex align-center gap-3" Style="min-width:0;">
+                                        <MudIcon Icon="@Icons.Material.Filled.Computer"
+                                                 Color="Color.Secondary" />
+                                        <div>
+                                            <div class="d-flex align-center gap-2">
+                                                <MudText Typo="Typo.body2" Style="font-weight:600">
+                                                    @FormatUserAgent(session.UserAgent)
+                                                </MudText>
+                                                @if (index == 0)
+                                                {
+                                                    <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Filled">Most Recent</MudChip>
+                                                }
+                                            </div>
+                                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                                @(session.IpAddress ?? "Unknown IP")
+                                                &nbsp;·&nbsp;
+                                                Last used @((session.LastUsedUtc ?? session.CreatedAtUtc).ToLocalTime().ToString("g"))
+                                            </MudText>
+                                        </div>
+                                    </div>
+                                    <MudIconButton Icon="@Icons.Material.Filled.Logout"
+                                                   Color="Color.Error"
+                                                   Size="Size.Small"
+                                                   Disabled="_sessionWorking"
+                                                   OnClick="@(() => RevokeSessionAsync(session.Id))" />
+                                </div>
+                            </MudListItem>
+                            <MudDivider />
+                        }
+                    </MudList>
+                }
+            </MudPaper>
+        </MudItem>
+
+    </MudGrid>
+}
+
+@code {
+    [Parameter] public string UserId { get; set; } = string.Empty;
+
+    private AdminUserDetailDto? _user;
+    private bool _loading = true;
+    private string? _error;
+
+    private bool _roleWorking;
+    private string? _roleError;
+
+    private bool _sessionWorking;
+    private string? _sessionError;
+
+    // All roles seeded at startup — keep in sync with DbInitializer.Roles
+    private static readonly string[] _availableRoles = ["Admin", "User"];
+
+    protected override async Task OnInitializedAsync() => await LoadUserAsync();
+
+    private async Task LoadUserAsync()
+    {
+        _loading = true;
+        _error = null;
+        var result = await AdminApi.GetUserByIdAsync(UserId);
+        _loading = false;
+
+        if (!result.IsSuccess)
+            _error = result.Error;
+        else
+            _user = result.Value;
+    }
+
+    private async Task AssignRoleAsync(string role)
+    {
+        _roleWorking = true;
+        _roleError = null;
+        var result = await AdminApi.AssignRoleAsync(UserId, role);
+        _roleWorking = false;
+
+        if (!result.IsSuccess)
+        {
+            _roleError = result.Error;
+            return;
+        }
+
+        Snackbar.Add($"Role '{role}' assigned.", Severity.Success);
+        await LoadUserAsync();
+    }
+
+    private async Task RemoveRoleAsync(string role)
+    {
+        _roleWorking = true;
+        _roleError = null;
+        var result = await AdminApi.RemoveRoleAsync(UserId, role);
+        _roleWorking = false;
+
+        if (!result.IsSuccess)
+        {
+            _roleError = result.Error;
+            return;
+        }
+
+        Snackbar.Add($"Role '{role}' removed.", Severity.Info);
+        await LoadUserAsync();
+    }
+
+    private async Task RevokeSessionAsync(Guid sessionId)
+    {
+        _sessionWorking = true;
+        _sessionError = null;
+        var result = await AdminApi.RevokeUserSessionAsync(UserId, sessionId);
+        _sessionWorking = false;
+
+        if (!result.IsSuccess)
+        {
+            _sessionError = result.Error;
+            return;
+        }
+
+        Snackbar.Add("Session revoked.", Severity.Info);
+        await LoadUserAsync();
+    }
+
+    private async Task RevokeAllSessionsAsync()
+    {
+        _sessionWorking = true;
+        _sessionError = null;
+        var result = await AdminApi.RevokeAllUserSessionsAsync(UserId);
+        _sessionWorking = false;
+
+        if (!result.IsSuccess)
+        {
+            _sessionError = result.Error;
+            return;
+        }
+
+        Snackbar.Add("All sessions revoked.", Severity.Success);
+        await LoadUserAsync();
+    }
+
+    private static string FormatUserAgent(string? ua)
+    {
+        if (string.IsNullOrWhiteSpace(ua)) return "Unknown device";
+        if (ua.Contains("Edg/")) return "Microsoft Edge";
+        if (ua.Contains("Chrome/")) return "Google Chrome";
+        if (ua.Contains("Firefox/")) return "Firefox";
+        if (ua.Contains("Safari/") && !ua.Contains("Chrome")) return "Safari";
+        return "Browser";
+    }
+}

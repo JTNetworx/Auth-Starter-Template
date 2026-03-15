@@ -1,4 +1,4 @@
-@page "/profile"
+﻿@page "/profile"
 @layout MainLayout
 @attribute [Authorize]
 @inject IUserApiService UserApi
@@ -8,6 +8,7 @@
 @inject ISnackbar Snackbar
 @inject TokenStorageService TokenStorage
 @inject IJSRuntime JS
+@inject NavigationManager Nav
 
 <PageTitle>My Profile</PageTitle>
 
@@ -19,68 +20,72 @@
 }
 else if (_profile is not null)
 {
-    <MudText Typo="Typo.h5" Class="mb-6" Style="font-weight:600">My Profile</MudText>
+    <MudText Typo="Typo.h5" Class="mb-4" Style="font-weight:600">My Profile</MudText>
 
-    <MudGrid Spacing="3">
-        <MudItem xs="12" sm="4" md="3">
-            <MudPaper Elevation="2" Class="pa-6 text-center">
-                <div class="d-flex flex-column align-center gap-3">
-                    @if (!string.IsNullOrEmpty(_profile.ProfileImageUrl))
-                    {
-                        <MudAvatar Style="width:120px; height:120px; font-size:2rem;">
-                            <MudImage Src="@_profile.ProfileImageUrl"
-                                      Alt="Profile image"
-                                      ObjectFit="ObjectFit.Cover"
-                                      Style="width:100%; height:100%;" />
-                        </MudAvatar>
-                    }
-                    else
-                    {
-                        <MudAvatar Color="Color.Primary" Style="width:120px; height:120px; font-size:2.5rem; font-weight:600;">
-                            @GetInitials()
-                        </MudAvatar>
-                    }
+    @* ── Horizontal Profile Header Card ─────────────────────────────────────── *@
+    <MudPaper Elevation="2" Class="pa-4 mb-4">
+        <div class="d-flex align-center gap-4 flex-wrap">
 
-                    <MudText Typo="Typo.h6" Style="font-weight:600">@_profile.FullName</MudText>
-                    <MudText Typo="Typo.caption" Color="Color.Secondary">@_profile.Email</MudText>
+            @* Avatar *@
+            <div style="flex-shrink:0;">
+                @if (!string.IsNullOrEmpty(_profile.ProfileImageUrl))
+                {
+                    <MudAvatar Style="width:80px; height:80px;">
+                        <MudImage Src="@_profile.ProfileImageUrl"
+                                  Alt="Profile image"
+                                  ObjectFit="ObjectFit.Cover"
+                                  Style="width:100%; height:100%;" />
+                    </MudAvatar>
+                }
+                else
+                {
+                    <MudAvatar Color="Color.Primary" Style="width:80px; height:80px; font-size:1.8rem; font-weight:600;">
+                        @GetInitials()
+                    </MudAvatar>
+                }
+            </div>
 
+            @* Name / Email / Chips *@
+            <div style="flex:1; min-width:180px;">
+                <MudText Typo="Typo.h6" Style="font-weight:600; line-height:1.2;">@_profile.FullName</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-2">@_profile.Email</MudText>
+                <div class="d-flex gap-1 flex-wrap">
                     @if (!_profile.EmailConfirmed)
                     {
-                        <MudChip T="string" Color="Color.Warning" Size="Size.Small" Icon="@Icons.Material.Filled.Warning">
-                            Email not confirmed
-                        </MudChip>
+                        <MudChip T="string" Color="Color.Warning" Size="Size.Small" Icon="@Icons.Material.Filled.Warning">Email not confirmed</MudChip>
                     }
                     else
                     {
-                        <MudChip T="string" Color="Color.Success" Size="Size.Small" Icon="@Icons.Material.Filled.Verified">
-                            Verified
-                        </MudChip>
+                        <MudChip T="string" Color="Color.Success" Size="Size.Small" Icon="@Icons.Material.Filled.Verified">Verified</MudChip>
                     }
-
+                    @if (_profile.TwoFactorEnabled)
+                    {
+                        <MudChip T="string" Color="Color.Info" Size="Size.Small" Icon="@Icons.Material.Filled.VerifiedUser">2FA On</MudChip>
+                    }
                     <AuthorizeView>
                         <Authorized>
-                            @{
-                                var roles = context.User.Claims
-                                    .Where(c => c.Type == "role")
-                                    .Select(c => c.Value)
-                                    .ToList();
-                            }
-                            @foreach (var role in roles)
+                            @foreach (var role in context.User.Claims.Where(c => c.Type == "role").Select(c => c.Value))
                             {
                                 var chipColor = role == "Admin" ? Color.Error : Color.Primary;
-                                <MudChip T="string" Color="@chipColor" Size="Size.Small" Icon="@Icons.Material.Filled.Badge">
-                                    @role
-                                </MudChip>
-                            }
-                            @if (roles.Count == 0)
-                            {
-                                <MudChip T="string" Color="Color.Default" Size="Size.Small" Icon="@Icons.Material.Filled.Badge">
-                                    No role
-                                </MudChip>
+                                <MudChip T="string" Color="@chipColor" Size="Size.Small" Icon="@Icons.Material.Filled.Badge">@role</MudChip>
                             }
                         </Authorized>
                     </AuthorizeView>
+                </div>
+            </div>
 
+            @* Meta + Photo Actions *@
+            <div class="d-flex flex-column align-end gap-1" style="flex-shrink:0;">
+                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                    Member since @_profile.CreatedAtUtc.ToString("MMM yyyy")
+                </MudText>
+                @if (_profile.LastLoginUtc.HasValue)
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        Last login @_profile.LastLoginUtc.Value.ToLocalTime().ToString("g")
+                    </MudText>
+                }
+                <div class="d-flex gap-2 mt-1">
                     <InputFile id="imageUpload" OnChange="UploadImageAsync" hidden accept="image/jpeg,image/png,image/webp,image/gif" />
                     <MudButton HtmlTag="label"
                                Variant="Variant.Outlined"
@@ -91,413 +96,610 @@ else if (_profile is not null)
                                Disabled="_uploadingImage">
                         @(_uploadingImage ? "Uploading..." : "Change Photo")
                     </MudButton>
-
                     @if (!string.IsNullOrEmpty(_profile.ProfileImageUrl))
                     {
-                        <MudButton Variant="Variant.Text"
-                                   Color="Color.Error"
-                                   StartIcon="@Icons.Material.Filled.DeleteForever"
-                                   Size="Size.Small"
-                                   OnClick="DeleteImageAsync"
-                                   Disabled="_uploadingImage">
-                            Remove Photo
-                        </MudButton>
+                        <MudIconButton Icon="@Icons.Material.Filled.DeleteForever"
+                                       Color="Color.Error"
+                                       Size="Size.Small"
+                                       OnClick="DeleteImageAsync"
+                                       Disabled="_uploadingImage" />
+                    }
+                </div>
+            </div>
+
+        </div>
+    </MudPaper>
+
+    @* ── Full-width Tabs ─────────────────────────────────────────────────────── *@
+    <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true"
+             ActivePanelIndexChanged="OnTabChangedAsync">
+
+        @* ── Personal Info ── *@
+        <MudTabPanel Text="Personal Info" Icon="@Icons.Material.Filled.Person">
+            <div class="pa-6 pt-8">
+            <EditForm Model="_editModel" OnValidSubmit="SaveProfileAsync">
+                <DataAnnotationsValidator />
+
+                <MudGrid Spacing="3">
+                    <MudItem xs="12" sm="6">
+                        <MudTextField Label="First Name"
+                                      @bind-Value="_editModel.FirstName"
+                                      For="@(() => _editModel.FirstName)"
+                                      Variant="Variant.Outlined"
+                                      Disabled="_saving" />
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudTextField Label="Last Name"
+                                      @bind-Value="_editModel.LastName"
+                                      For="@(() => _editModel.LastName)"
+                                      Variant="Variant.Outlined"
+                                      Disabled="_saving" />
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudTextField Label="Phone Number"
+                                      @bind-Value="_editModel.PhoneNumber"
+                                      For="@(() => _editModel.PhoneNumber)"
+                                      Variant="Variant.Outlined"
+                                      Adornment="Adornment.Start"
+                                      AdornmentIcon="@Icons.Material.Filled.Phone"
+                                      Disabled="_saving" />
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudDatePicker Label="Date of Birth"
+                                       @bind-Date="_dateOfBirth"
+                                       Variant="Variant.Outlined"
+                                       Disabled="_saving"
+                                       MaxDate="DateTime.Today.AddYears(-13)" />
+                    </MudItem>
+                </MudGrid>
+
+                <MudText Typo="Typo.subtitle2" Class="mt-6 mb-3" Style="font-weight:600; color:var(--mud-palette-primary)">
+                    Address
+                </MudText>
+
+                <MudGrid Spacing="3">
+                    <MudItem xs="12">
+                        <MudTextField Label="Street Address"
+                                      @bind-Value="_editModel.Street"
+                                      For="@(() => _editModel.Street)"
+                                      Variant="Variant.Outlined"
+                                      Disabled="_saving" />
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudTextField Label="Street Address Line 2"
+                                      @bind-Value="_editModel.Street2"
+                                      For="@(() => _editModel.Street2)"
+                                      Variant="Variant.Outlined"
+                                      Disabled="_saving" />
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudTextField Label="City"
+                                      @bind-Value="_editModel.City"
+                                      For="@(() => _editModel.City)"
+                                      Variant="Variant.Outlined"
+                                      Disabled="_saving" />
+                    </MudItem>
+                    <MudItem xs="12" sm="3">
+                        <MudTextField Label="State / Province"
+                                      @bind-Value="_editModel.State"
+                                      For="@(() => _editModel.State)"
+                                      Variant="Variant.Outlined"
+                                      Disabled="_saving" />
+                    </MudItem>
+                    <MudItem xs="12" sm="3">
+                        <MudTextField Label="Postal Code"
+                                      @bind-Value="_editModel.PostalCode"
+                                      For="@(() => _editModel.PostalCode)"
+                                      Variant="Variant.Outlined"
+                                      Disabled="_saving" />
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudSelect T="int?" Label="Country"
+                                   @bind-Value="_editModel.CountryId"
+                                   Variant="Variant.Outlined"
+                                   Clearable="true"
+                                   Disabled="_saving || _loadingCountries">
+                            @foreach (var c in _countries)
+                            {
+                                <MudSelectItem T="int?" Value="@((int?)c.Id)">@c.Name</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                </MudGrid>
+
+                <div class="d-flex justify-end mt-6">
+                    <MudButton ButtonType="ButtonType.Submit"
+                               Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.Save"
+                               Disabled="_saving">
+                        @(_saving ? "Saving..." : "Save Changes")
+                    </MudButton>
+                </div>
+            </EditForm>
+            </div>
+        </MudTabPanel>
+
+        @* ── Security (password only) ── *@
+        <MudTabPanel Text="Security" Icon="@Icons.Material.Filled.Security">
+            <div class="pa-6 pt-8">
+            <MudText Typo="Typo.subtitle1" Style="font-weight:600" Class="mb-4">Change Password</MudText>
+
+            <EditForm Model="_changePasswordModel" OnValidSubmit="ChangePasswordAsync">
+                <DataAnnotationsValidator />
+
+                <MudGrid Spacing="3">
+                    <MudItem xs="12" md="6">
+                        <MudTextField Label="Current Password"
+                                      @bind-Value="_changePasswordModel.CurrentPassword"
+                                      For="@(() => _changePasswordModel.CurrentPassword)"
+                                      Variant="Variant.Outlined"
+                                      InputType="InputType.Password"
+                                      Disabled="_changingPassword" />
+                    </MudItem>
+                    <MudItem xs="12" md="6" />
+                    <MudItem xs="12" md="6">
+                        <MudTextField Label="New Password"
+                                      @bind-Value="_changePasswordModel.NewPassword"
+                                      For="@(() => _changePasswordModel.NewPassword)"
+                                      Variant="Variant.Outlined"
+                                      InputType="@(_showNewPassword ? InputType.Text : InputType.Password)"
+                                      HelperText="Min 8 chars, upper, lower, digit & special char"
+                                      Adornment="Adornment.End"
+                                      AdornmentIcon="@(_showNewPassword ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
+                                      OnAdornmentClick="@(() => _showNewPassword = !_showNewPassword)"
+                                      Disabled="_changingPassword" />
+                    </MudItem>
+                    <MudItem xs="12" md="6">
+                        <MudTextField Label="Confirm New Password"
+                                      @bind-Value="_changePasswordModel.ConfirmNewPassword"
+                                      For="@(() => _changePasswordModel.ConfirmNewPassword)"
+                                      Variant="Variant.Outlined"
+                                      InputType="InputType.Password"
+                                      Disabled="_changingPassword" />
+                    </MudItem>
+                </MudGrid>
+
+                @if (!string.IsNullOrEmpty(_passwordError))
+                {
+                    <MudAlert Severity="Severity.Error" Class="mt-4" Dense="true">@_passwordError</MudAlert>
+                }
+
+                <div class="d-flex justify-end mt-6">
+                    <MudButton ButtonType="ButtonType.Submit"
+                               Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.Lock"
+                               Disabled="_changingPassword">
+                        @(_changingPassword ? "Changing..." : "Change Password")
+                    </MudButton>
+                </div>
+            </EditForm>
+            </div>
+        </MudTabPanel>
+
+        @* ── Two-Factor Authentication ── *@
+        <MudTabPanel Text="Two-Factor Auth" Icon="@Icons.Material.Filled.PhonelinkLock">
+            <div class="pa-6 pt-8">
+
+                <div class="d-flex align-center justify-space-between mb-2">
+                    <div>
+                        <MudText Typo="Typo.subtitle1" Style="font-weight:600">Two-Factor Authentication</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                            Protect your account with a time-based one-time code from an authenticator app.
+                        </MudText>
+                    </div>
+                    @if (_profile!.TwoFactorEnabled)
+                    {
+                        <MudChip T="string" Color="Color.Success" Size="Size.Small" Icon="@Icons.Material.Filled.VerifiedUser">Enabled</MudChip>
+                    }
+                    else
+                    {
+                        <MudChip T="string" Color="Color.Default" Size="Size.Small" Icon="@Icons.Material.Filled.Shield">Disabled</MudChip>
                     }
                 </div>
 
-                <MudDivider Class="my-4" />
-
-                <MudText Typo="Typo.caption" Color="Color.Secondary">
-                    Member since @_profile.CreatedAtUtc.ToString("MMM yyyy")
-                </MudText>
-                @if (_profile.LastLoginUtc.HasValue)
+                @if (!string.IsNullOrEmpty(_tfaError))
                 {
-                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">
-                        Last login @_profile.LastLoginUtc.Value.ToLocalTime().ToString("g")
-                    </MudText>
+                    <MudAlert Severity="Severity.Error" Class="mt-3 mb-3" Dense="true">@_tfaError</MudAlert>
                 }
-            </MudPaper>
-        </MudItem>
 
-        @* ── DEBUG: JWT Claims — remove before prod ──────────────────────────────── *@
-        <MudItem xs="12">
-            <AuthorizeView>
-                <Authorized>
-                    <MudExpansionPanels Elevation="1">
-                        <MudExpansionPanel Text="🔍 JWT Claims (debug)" MaxHeight="400">
-                            <MudTable Items="@context.User.Claims.OrderBy(c => c.Type)"
-                                      Dense="true" Hover="true" Striped="true" Elevation="0">
-                                <HeaderContent>
-                                    <MudTh>Type</MudTh>
-                                    <MudTh>Value</MudTh>
-                                </HeaderContent>
-                                <RowTemplate Context="claim">
-                                    <MudTd>
-                                        <MudText Typo="Typo.caption" Style="font-family:monospace; word-break:break-all;">
-                                            @claim.Type
-                                        </MudText>
-                                    </MudTd>
-                                    <MudTd>
-                                        <MudText Typo="Typo.caption" Style="font-family:monospace; word-break:break-all;">
-                                            @claim.Value
-                                        </MudText>
-                                    </MudTd>
-                                </RowTemplate>
-                            </MudTable>
-                        </MudExpansionPanel>
-                    </MudExpansionPanels>
-                </Authorized>
-            </AuthorizeView>
-        </MudItem>
-        @* ── END DEBUG ────────────────────────────────────────────────────────── *@
-
-        <MudItem xs="12" sm="8" md="9">
-            <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true">
-                <MudTabPanel Text="Personal Info" Icon="@Icons.Material.Filled.Person">
-                    <div class="pa-6 pt-8">
-                    <EditForm Model="_editModel" OnValidSubmit="SaveProfileAsync">
-                        <DataAnnotationsValidator />
-
-                        <MudGrid Spacing="3">
-                            <MudItem xs="12" sm="6">
-                                <MudTextField Label="First Name"
-                                              @bind-Value="_editModel.FirstName"
-                                              For="@(() => _editModel.FirstName)"
-                                              Variant="Variant.Outlined"
-                                              Disabled="_saving" />
+                @if (!_profile!.TwoFactorEnabled)
+                {
+                    @if (_tfaSetup is null)
+                    {
+                        <MudPaper Elevation="0" Class="mt-4 pa-6" Style="border:1px dashed var(--mud-palette-lines-default); border-radius:8px; max-width:560px;">
+                            <MudIcon Icon="@Icons.Material.Filled.QrCode2" Color="Color.Secondary" Style="font-size:3rem;" Class="d-block mb-3" />
+                            <MudText Typo="Typo.body1" Style="font-weight:600;" Class="mb-1">Set up an authenticator app</MudText>
+                            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+                                Use Google Authenticator, Authy, Microsoft Authenticator, or any TOTP-compatible app to generate one-time codes.
+                            </MudText>
+                            <MudButton Variant="Variant.Filled"
+                                       Color="Color.Primary"
+                                       StartIcon="@Icons.Material.Filled.QrCode"
+                                       Disabled="_tfaWorking"
+                                       OnClick="LoadTfaSetupAsync">
+                                @(_tfaWorking ? "Loading..." : "Begin Setup")
+                            </MudButton>
+                        </MudPaper>
+                    }
+                    else
+                    {
+                        <MudGrid Spacing="4" Class="mt-2">
+                            <MudItem xs="12" sm="5" Class="d-flex flex-column align-center">
+                                <MudText Typo="Typo.subtitle2" Style="font-weight:600;" Class="mb-3">Step 1 — Scan the QR code</MudText>
+                                <img src="data:image/png;base64,@_tfaSetup.QrCodeBase64"
+                                     alt="QR code"
+                                     style="width:200px; height:200px; image-rendering:pixelated; border-radius:8px;" />
+                                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-3 text-center">
+                                    Can't scan? Enter this key manually:
+                                </MudText>
+                                <MudText Typo="Typo.body2"
+                                         Style="font-family:monospace; font-weight:600; letter-spacing:3px; word-break:break-all;"
+                                         Class="mt-1 text-center">
+                                    @_tfaSetup.SharedKey
+                                </MudText>
                             </MudItem>
-                            <MudItem xs="12" sm="6">
-                                <MudTextField Label="Last Name"
-                                              @bind-Value="_editModel.LastName"
-                                              For="@(() => _editModel.LastName)"
-                                              Variant="Variant.Outlined"
-                                              Disabled="_saving" />
-                            </MudItem>
-                            <MudItem xs="12" sm="6">
-                                <MudTextField Label="Phone Number"
-                                              @bind-Value="_editModel.PhoneNumber"
-                                              For="@(() => _editModel.PhoneNumber)"
-                                              Variant="Variant.Outlined"
-                                              Adornment="Adornment.Start"
-                                              AdornmentIcon="@Icons.Material.Filled.Phone"
-                                              Disabled="_saving" />
-                            </MudItem>
-                            <MudItem xs="12" sm="6">
-                                <MudDatePicker Label="Date of Birth"
-                                               @bind-Date="_dateOfBirth"
-                                               Variant="Variant.Outlined"
-                                               Disabled="_saving"
-                                               MaxDate="DateTime.Today.AddYears(-13)" />
+                            <MudItem xs="12" sm="7">
+                                <MudText Typo="Typo.subtitle2" Style="font-weight:600;" Class="mb-3">Step 2 — Enter the verification code</MudText>
+                                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+                                    Open your authenticator app, scan the QR code, then enter the 6-digit code shown to confirm setup.
+                                </MudText>
+                                <EditForm Model="_enableTfaModel" OnValidSubmit="EnableTwoFactorAsync">
+                                    <DataAnnotationsValidator />
+                                    <MudTextField Label="Verification Code"
+                                                  @bind-Value="_enableTfaModel.Code"
+                                                  For="@(() => _enableTfaModel.Code)"
+                                                  Variant="Variant.Outlined"
+                                                  Style="max-width:220px;"
+                                                  InputType="InputType.Number"
+                                                  autocomplete="one-time-code"
+                                                  Disabled="_tfaWorking"
+                                                  Class="mb-4" />
+                                    <div class="d-flex gap-3">
+                                        <MudButton ButtonType="ButtonType.Submit"
+                                                   Variant="Variant.Filled"
+                                                   Color="Color.Primary"
+                                                   StartIcon="@Icons.Material.Filled.Check"
+                                                   Disabled="_tfaWorking">
+                                            @(_tfaWorking ? "Enabling..." : "Enable 2FA")
+                                        </MudButton>
+                                        <MudButton Variant="Variant.Outlined"
+                                                   Color="Color.Secondary"
+                                                   OnClick="@(() => { _tfaSetup = null; _tfaError = null; })"
+                                                   Disabled="_tfaWorking">
+                                            Cancel
+                                        </MudButton>
+                                    </div>
+                                </EditForm>
                             </MudItem>
                         </MudGrid>
+                    }
+                }
+                else
+                {
+                    <MudPaper Elevation="0" Class="mt-4 pa-4 d-flex align-center gap-4 flex-wrap"
+                              Style="border:1px solid var(--mud-palette-success); border-radius:8px; max-width:560px;">
+                        <MudIcon Icon="@Icons.Material.Filled.VerifiedUser" Color="Color.Success" Style="font-size:2.5rem;" />
+                        <div style="flex:1;">
+                            <MudText Typo="Typo.body1" Style="font-weight:600;">Two-factor authentication is active</MudText>
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                Your account is protected. You will be asked for a code each time you sign in.
+                            </MudText>
+                        </div>
+                    </MudPaper>
 
-                        <MudText Typo="Typo.subtitle2" Class="mt-6 mb-3" Style="font-weight:600; color:var(--mud-palette-primary)">
-                            Address
+                    @if (!_showDisableTfa)
+                    {
+                        <MudButton Variant="Variant.Outlined"
+                                   Color="Color.Error"
+                                   StartIcon="@Icons.Material.Filled.NoEncryption"
+                                   Class="mt-4"
+                                   OnClick="@(() => { _showDisableTfa = true; _tfaError = null; })">
+                            Disable Two-Factor Authentication
+                        </MudButton>
+                    }
+                    else
+                    {
+                        <MudPaper Elevation="0" Class="mt-4 pa-4" Style="border:1px solid var(--mud-palette-error); border-radius:8px; max-width:480px;">
+                            <MudText Typo="Typo.body2" Class="mb-3">
+                                Enter the current code from your authenticator app to confirm disabling 2FA.
+                            </MudText>
+                            <EditForm Model="_disableTfaModel" OnValidSubmit="DisableTwoFactorAsync">
+                                <DataAnnotationsValidator />
+                                <MudTextField Label="Verification Code"
+                                              @bind-Value="_disableTfaModel.Code"
+                                              For="@(() => _disableTfaModel.Code)"
+                                              Variant="Variant.Outlined"
+                                              Style="max-width:220px;"
+                                              InputType="InputType.Number"
+                                              autocomplete="one-time-code"
+                                              Disabled="_tfaWorking"
+                                              Class="mb-4" />
+                                <div class="d-flex gap-3">
+                                    <MudButton ButtonType="ButtonType.Submit"
+                                               Variant="Variant.Filled"
+                                               Color="Color.Error"
+                                               StartIcon="@Icons.Material.Filled.NoEncryption"
+                                               Disabled="_tfaWorking">
+                                        @(_tfaWorking ? "Disabling..." : "Disable 2FA")
+                                    </MudButton>
+                                    <MudButton Variant="Variant.Outlined"
+                                               Color="Color.Secondary"
+                                               OnClick="@(() => { _showDisableTfa = false; _disableTfaModel.Code = string.Empty; _tfaError = null; })"
+                                               Disabled="_tfaWorking">
+                                        Cancel
+                                    </MudButton>
+                                </div>
+                            </EditForm>
+                        </MudPaper>
+                    }
+                }
+
+            </div>
+        </MudTabPanel>
+
+        @* ── Sessions ── *@
+        <MudTabPanel Text="Sessions" Icon="@Icons.Material.Filled.Devices">
+            <div class="pa-6 pt-8">
+                <div class="d-flex align-center justify-space-between mb-4">
+                    <div>
+                        <MudText Typo="Typo.subtitle1" Style="font-weight:600">Active Sessions</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                            These devices are currently signed in to your account.
                         </MudText>
-
-                        <MudGrid Spacing="3">
-                            <MudItem xs="12">
-                                <MudTextField Label="Street Address"
-                                              @bind-Value="_editModel.Street"
-                                              For="@(() => _editModel.Street)"
-                                              Variant="Variant.Outlined"
-                                              Disabled="_saving" />
-                            </MudItem>
-                            <MudItem xs="12">
-                                <MudTextField Label="Street Address Line 2"
-                                              @bind-Value="_editModel.Street2"
-                                              For="@(() => _editModel.Street2)"
-                                              Variant="Variant.Outlined"
-                                              Disabled="_saving" />
-                            </MudItem>
-                            <MudItem xs="12" sm="6">
-                                <MudTextField Label="City"
-                                              @bind-Value="_editModel.City"
-                                              For="@(() => _editModel.City)"
-                                              Variant="Variant.Outlined"
-                                              Disabled="_saving" />
-                            </MudItem>
-                            <MudItem xs="12" sm="3">
-                                <MudTextField Label="State / Province"
-                                              @bind-Value="_editModel.State"
-                                              For="@(() => _editModel.State)"
-                                              Variant="Variant.Outlined"
-                                              Disabled="_saving" />
-                            </MudItem>
-                            <MudItem xs="12" sm="3">
-                                <MudTextField Label="Postal Code"
-                                              @bind-Value="_editModel.PostalCode"
-                                              For="@(() => _editModel.PostalCode)"
-                                              Variant="Variant.Outlined"
-                                              Disabled="_saving" />
-                            </MudItem>
-                            <MudItem xs="12">
-                                <MudSelect T="int?" Label="Country"
-                                           @bind-Value="_editModel.CountryId"
-                                           Variant="Variant.Outlined"
-                                           Clearable="true"
-                                           Disabled="_saving || _loadingCountries">
-                                    @foreach (var c in _countries)
-                                    {
-                                        <MudSelectItem T="int?" Value="@((int?)c.Id)">@c.Name</MudSelectItem>
-                                    }
-                                </MudSelect>
-                            </MudItem>
-                        </MudGrid>
-
-                        <div class="d-flex justify-end mt-6">
-                            <MudButton ButtonType="ButtonType.Submit"
-                                       Variant="Variant.Filled"
-                                       Color="Color.Primary"
-                                       StartIcon="@Icons.Material.Filled.Save"
-                                       Disabled="_saving">
-                                @(_saving ? "Saving..." : "Save Changes")
-                            </MudButton>
-                        </div>
-                    </EditForm>
                     </div>
-                </MudTabPanel>
+                    <MudButton Variant="Variant.Outlined"
+                               Color="Color.Error"
+                               StartIcon="@Icons.Material.Filled.Logout"
+                               Size="Size.Small"
+                               Disabled="_sessionsWorking"
+                               OnClick="RevokeAllOtherSessionsAsync">
+                        Sign Out All Other Devices
+                    </MudButton>
+                </div>
 
-                <MudTabPanel Text="Security" Icon="@Icons.Material.Filled.Security">
-                    <div class="pa-6 pt-8">
-                    <MudText Typo="Typo.subtitle1" Style="font-weight:600" Class="mb-4">Change Password</MudText>
+                @if (_sessionError is not null)
+                {
+                    <MudAlert Severity="Severity.Error" Class="mb-4" Dense="true">@_sessionError</MudAlert>
+                }
 
-                    <EditForm Model="_changePasswordModel" OnValidSubmit="ChangePasswordAsync">
-                        <DataAnnotationsValidator />
-
-                        <MudGrid Spacing="3">
-                            <MudItem xs="12">
-                                <MudTextField Label="Current Password"
-                                              @bind-Value="_changePasswordModel.CurrentPassword"
-                                              For="@(() => _changePasswordModel.CurrentPassword)"
-                                              Variant="Variant.Outlined"
-                                              InputType="InputType.Password"
-                                              Disabled="_changingPassword" />
-                            </MudItem>
-                            <MudItem xs="12">
-                                <MudTextField Label="New Password"
-                                              @bind-Value="_changePasswordModel.NewPassword"
-                                              For="@(() => _changePasswordModel.NewPassword)"
-                                              Variant="Variant.Outlined"
-                                              InputType="@(_showNewPassword ? InputType.Text : InputType.Password)"
-                                              HelperText="Min 8 chars, upper, lower, digit & special char"
-                                              Adornment="Adornment.End"
-                                              AdornmentIcon="@(_showNewPassword ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
-                                              OnAdornmentClick="@(() => _showNewPassword = !_showNewPassword)"
-                                              Disabled="_changingPassword" />
-                            </MudItem>
-                            <MudItem xs="12">
-                                <MudTextField Label="Confirm New Password"
-                                              @bind-Value="_changePasswordModel.ConfirmNewPassword"
-                                              For="@(() => _changePasswordModel.ConfirmNewPassword)"
-                                              Variant="Variant.Outlined"
-                                              InputType="InputType.Password"
-                                              Disabled="_changingPassword" />
-                            </MudItem>
-                        </MudGrid>
-
-                        @if (!string.IsNullOrEmpty(_passwordError))
-                        {
-                            <MudAlert Severity="Severity.Error" Class="mt-4" Dense="true">@_passwordError</MudAlert>
-                        }
-
-                        <div class="d-flex justify-end mt-6">
-                            <MudButton ButtonType="ButtonType.Submit"
-                                       Variant="Variant.Filled"
-                                       Color="Color.Primary"
-                                       StartIcon="@Icons.Material.Filled.Lock"
-                                       Disabled="_changingPassword">
-                                @(_changingPassword ? "Changing..." : "Change Password")
-                            </MudButton>
-                        </div>
-                    </EditForm>
+                @if (_loadingSessions)
+                {
+                    <div class="d-flex justify-center pa-6">
+                        <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
                     </div>
-                </MudTabPanel>
-
-                <MudTabPanel Text="Sessions" Icon="@Icons.Material.Filled.Devices">
-                    <div class="pa-6 pt-8">
-                        <div class="d-flex align-center justify-space-between mb-4">
-                            <div>
-                                <MudText Typo="Typo.subtitle1" Style="font-weight:600">Active Sessions</MudText>
-                                <MudText Typo="Typo.caption" Color="Color.Secondary">
-                                    These devices are currently signed in to your account.
-                                </MudText>
-                            </div>
-                            <MudButton Variant="Variant.Outlined"
-                                       Color="Color.Error"
-                                       StartIcon="@Icons.Material.Filled.Logout"
-                                       Size="Size.Small"
-                                       Disabled="_sessionsWorking"
-                                       OnClick="RevokeAllOtherSessionsAsync">
-                                Sign Out All Other Devices
-                            </MudButton>
-                        </div>
-
-                        @if (_sessionError is not null)
+                }
+                else if (_sessions.Count == 0)
+                {
+                    <MudPaper Elevation="0" Class="pa-6 text-center" Style="border:1px dashed var(--mud-palette-lines-default);">
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">No active sessions found.</MudText>
+                    </MudPaper>
+                }
+                else
+                {
+                    <MudList T="SessionDto" Dense="false">
+                        @foreach (var session in _sessions)
                         {
-                            <MudAlert Severity="Severity.Error" Class="mb-4" Dense="true">@_sessionError</MudAlert>
-                        }
-
-                        @if (_loadingSessions)
-                        {
-                            <div class="d-flex justify-center pa-6">
-                                <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
-                            </div>
-                        }
-                        else if (_sessions.Count == 0)
-                        {
-                            <MudPaper Elevation="0" Class="pa-6 text-center" Style="border:1px dashed var(--mud-palette-lines-default);">
-                                <MudText Typo="Typo.body2" Color="Color.Secondary">No active sessions found.</MudText>
-                            </MudPaper>
-                        }
-                        else
-                        {
-                            <MudList T="SessionDto" Dense="false">
-                                @foreach (var session in _sessions)
-                                {
-                                    <MudListItem T="SessionDto">
-                                        <div class="d-flex align-center justify-space-between gap-3">
-                                            <div class="d-flex align-center gap-3" Style="min-width:0;">
-                                                <MudIcon Icon="@(session.IsCurrent ? Icons.Material.Filled.DevicesOther : Icons.Material.Filled.Computer)"
-                                                         Color="@(session.IsCurrent ? Color.Primary : Color.Secondary)" />
-                                                <div Style="min-width:0;">
-                                                    <div class="d-flex align-center gap-2 flex-wrap">
-                                                        <MudText Typo="Typo.body2" Style="font-weight:600;">
-                                                            @FormatUserAgent(session.UserAgent)
-                                                        </MudText>
-                                                        @if (session.IsCurrent)
-                                                        {
-                                                            <MudChip T="string" Color="Color.Success" Size="Size.Small" Class="my-0">Current</MudChip>
-                                                        }
-                                                    </div>
-                                                    <MudText Typo="Typo.caption" Color="Color.Secondary">
-                                                        @(session.IpAddress ?? "Unknown IP")
-                                                        &nbsp;·&nbsp;
-                                                        Last used @((session.LastUsedUtc ?? session.CreatedAtUtc).ToLocalTime().ToString("g"))
-                                                    </MudText>
-                                                    <MudText Typo="Typo.caption" Color="Color.Secondary">
-                                                        Started @session.CreatedAtUtc.ToLocalTime().ToString("g")
-                                                    </MudText>
-                                                </div>
-                                            </div>
-                                            @if (!session.IsCurrent)
-                                            {
-                                                <MudIconButton Icon="@Icons.Material.Filled.Logout"
-                                                               Color="Color.Error"
-                                                               Size="Size.Small"
-                                                               Disabled="_sessionsWorking"
-                                                               OnClick="@(() => RevokeSessionAsync(session.Id))" />
-                                            }
-                                        </div>
-                                    </MudListItem>
-                                    <MudDivider />
-                                }
-                            </MudList>
-                        }
-                    </div>
-                </MudTabPanel>
-
-                <MudTabPanel Text="Passkeys" Icon="@Icons.Material.Filled.Fingerprint">
-                    <div class="pa-6 pt-8">
-                        <div class="d-flex align-center justify-space-between mb-4">
-                            <MudText Typo="Typo.subtitle1" Style="font-weight:600">Registered Passkeys</MudText>
-                            <MudButton Variant="Variant.Outlined"
-                                       Color="Color.Primary"
-                                       StartIcon="@Icons.Material.Filled.Add"
-                                       Size="Size.Small"
-                                       Disabled="_passkeyWorking"
-                                       OnClick="AddPasskeyAsync">
-                                Add Passkey
-                            </MudButton>
-                        </div>
-
-                        @if (_passkeyError is not null)
-                        {
-                            <MudAlert Severity="Severity.Error" Class="mb-4" Dense="true">@_passkeyError</MudAlert>
-                        }
-
-                        @if (_loadingPasskeys)
-                        {
-                            <div class="d-flex justify-center pa-6">
-                                <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
-                            </div>
-                        }
-                        else if (_passkeys.Count == 0)
-                        {
-                            <MudPaper Elevation="0" Class="pa-6 text-center" Style="border:1px dashed var(--mud-palette-lines-default);">
-                                <MudIcon Icon="@Icons.Material.Filled.Fingerprint" Color="Color.Secondary" Style="font-size:3rem;" />
-                                <MudText Typo="Typo.body1" Color="Color.Secondary" Class="mt-2">No passkeys registered yet.</MudText>
-                                <MudText Typo="Typo.body2" Color="Color.Secondary">
-                                    Add a passkey to sign in with Face ID, Touch ID, or a security key.
-                                </MudText>
-                            </MudPaper>
-                        }
-                        else
-                        {
-                            <MudList T="PasskeyInfoDto" Dense="true">
-                                @foreach (var pk in _passkeys)
-                                {
-                                    <MudListItem T="PasskeyInfoDto">
-                                        <div class="d-flex align-center justify-space-between">
-                                            <div class="d-flex align-center gap-3">
-                                                <MudIcon Icon="@Icons.Material.Filled.Key" Color="Color.Primary" />
-                                                <div>
-                                                    @if (_renamingCredentialId == pk.CredentialId)
-                                                    {
-                                                        <div class="d-flex align-center gap-2">
-                                                            <MudTextField @bind-Value="_renameValue"
-                                                                          Variant="Variant.Outlined"
-                                                                          Margin="Margin.Dense"
-                                                                          Style="min-width:160px;"
-                                                                          MaxLength="64"
-                                                                          @onkeydown="@(async e => { if (e.Key == "Enter") await SaveRenameAsync(pk.CredentialId); else if (e.Key == "Escape") CancelRename(); })" />
-                                                            <MudIconButton Icon="@Icons.Material.Filled.Check"
-                                                                           Color="Color.Success"
-                                                                           Size="Size.Small"
-                                                                           Disabled="_passkeyWorking"
-                                                                           OnClick="@(() => SaveRenameAsync(pk.CredentialId))" />
-                                                            <MudIconButton Icon="@Icons.Material.Filled.Close"
-                                                                           Size="Size.Small"
-                                                                           OnClick="CancelRename" />
-                                                        </div>
-                                                    }
-                                                    else
-                                                    {
-                                                        <MudText Typo="Typo.body2" Style="font-weight:600">
-                                                            @(pk.Name ?? "Passkey")
-                                                        </MudText>
-                                                    }
-                                                    <MudText Typo="Typo.caption" Color="Color.Secondary">
-                                                        Added @pk.CreatedAt.LocalDateTime.ToString("MMM d, yyyy")
-                                                    </MudText>
-                                                </div>
-                                            </div>
-                                            <div class="d-flex align-center">
-                                                @if (_renamingCredentialId != pk.CredentialId)
+                            <MudListItem T="SessionDto">
+                                <div class="d-flex align-center justify-space-between gap-3">
+                                    <div class="d-flex align-center gap-3" Style="min-width:0;">
+                                        <MudIcon Icon="@(session.IsCurrent ? Icons.Material.Filled.DevicesOther : Icons.Material.Filled.Computer)"
+                                                 Color="@(session.IsCurrent ? Color.Primary : Color.Secondary)" />
+                                        <div Style="min-width:0;">
+                                            <div class="d-flex align-center gap-2 flex-wrap">
+                                                <MudText Typo="Typo.body2" Style="font-weight:600;">
+                                                    @FormatUserAgent(session.UserAgent)
+                                                </MudText>
+                                                @if (session.IsCurrent)
                                                 {
-                                                    <MudIconButton Icon="@Icons.Material.Filled.Edit"
-                                                                   Color="Color.Default"
+                                                    <MudChip T="string" Color="Color.Success" Size="Size.Small" Class="my-0">Current</MudChip>
+                                                }
+                                            </div>
+                                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                                @(session.IpAddress ?? "Unknown IP")
+                                                &nbsp;·&nbsp;
+                                                Last used @((session.LastUsedUtc ?? session.CreatedAtUtc).ToLocalTime().ToString("g"))
+                                            </MudText>
+                                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                                Started @session.CreatedAtUtc.ToLocalTime().ToString("g")
+                                            </MudText>
+                                        </div>
+                                    </div>
+                                    @if (!session.IsCurrent)
+                                    {
+                                        <MudIconButton Icon="@Icons.Material.Filled.Logout"
+                                                       Color="Color.Error"
+                                                       Size="Size.Small"
+                                                       Disabled="_sessionsWorking"
+                                                       OnClick="@(() => RevokeSessionAsync(session.Id))" />
+                                    }
+                                </div>
+                            </MudListItem>
+                            <MudDivider />
+                        }
+                    </MudList>
+                }
+            </div>
+        </MudTabPanel>
+
+        @* ── Passkeys ── *@
+        <MudTabPanel Text="Passkeys" Icon="@Icons.Material.Filled.Fingerprint">
+            <div class="pa-6 pt-8">
+                <div class="d-flex align-center justify-space-between mb-4">
+                    <MudText Typo="Typo.subtitle1" Style="font-weight:600">Registered Passkeys</MudText>
+                    <MudButton Variant="Variant.Outlined"
+                               Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.Add"
+                               Size="Size.Small"
+                               Disabled="_passkeyWorking"
+                               OnClick="AddPasskeyAsync">
+                        Add Passkey
+                    </MudButton>
+                </div>
+
+                @if (_passkeyError is not null)
+                {
+                    <MudAlert Severity="Severity.Error" Class="mb-4" Dense="true">@_passkeyError</MudAlert>
+                }
+
+                @if (_loadingPasskeys)
+                {
+                    <div class="d-flex justify-center pa-6">
+                        <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+                    </div>
+                }
+                else if (_passkeys.Count == 0)
+                {
+                    <MudPaper Elevation="0" Class="pa-6 text-center" Style="border:1px dashed var(--mud-palette-lines-default);">
+                        <MudIcon Icon="@Icons.Material.Filled.Fingerprint" Color="Color.Secondary" Style="font-size:3rem;" />
+                        <MudText Typo="Typo.body1" Color="Color.Secondary" Class="mt-2">No passkeys registered yet.</MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">
+                            Add a passkey to sign in with Face ID, Touch ID, or a security key.
+                        </MudText>
+                    </MudPaper>
+                }
+                else
+                {
+                    <MudList T="PasskeyInfoDto" Dense="true">
+                        @foreach (var pk in _passkeys)
+                        {
+                            <MudListItem T="PasskeyInfoDto">
+                                <div class="d-flex align-center justify-space-between">
+                                    <div class="d-flex align-center gap-3">
+                                        <MudIcon Icon="@Icons.Material.Filled.Key" Color="Color.Primary" />
+                                        <div>
+                                            @if (_renamingCredentialId == pk.CredentialId)
+                                            {
+                                                <div class="d-flex align-center gap-2">
+                                                    <MudTextField @bind-Value="_renameValue"
+                                                                  Variant="Variant.Outlined"
+                                                                  Margin="Margin.Dense"
+                                                                  Style="min-width:160px;"
+                                                                  MaxLength="64"
+                                                                  @onkeydown="@(async e => { if (e.Key == "Enter") await SaveRenameAsync(pk.CredentialId); else if (e.Key == "Escape") CancelRename(); })" />
+                                                    <MudIconButton Icon="@Icons.Material.Filled.Check"
+                                                                   Color="Color.Success"
                                                                    Size="Size.Small"
                                                                    Disabled="_passkeyWorking"
-                                                                   OnClick="@(() => StartRename(pk))" />
-                                                }
-                                                <MudIconButton Icon="@Icons.Material.Filled.DeleteForever"
-                                                               Color="Color.Error"
-                                                               Size="Size.Small"
-                                                               Disabled="_passkeyWorking"
-                                                               OnClick="@(() => RemovePasskeyAsync(pk.CredentialId))" />
-                                            </div>
+                                                                   OnClick="@(() => SaveRenameAsync(pk.CredentialId))" />
+                                                    <MudIconButton Icon="@Icons.Material.Filled.Close"
+                                                                   Size="Size.Small"
+                                                                   OnClick="CancelRename" />
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <MudText Typo="Typo.body2" Style="font-weight:600">@(pk.Name ?? "Passkey")</MudText>
+                                            }
+                                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                                Added @pk.CreatedAt.LocalDateTime.ToString("MMM d, yyyy")
+                                            </MudText>
                                         </div>
-                                    </MudListItem>
-                                    <MudDivider />
-                                }
-                            </MudList>
+                                    </div>
+                                    <div class="d-flex align-center">
+                                        @if (_renamingCredentialId != pk.CredentialId)
+                                        {
+                                            <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                                           Color="Color.Default"
+                                                           Size="Size.Small"
+                                                           Disabled="_passkeyWorking"
+                                                           OnClick="@(() => StartRename(pk))" />
+                                        }
+                                        <MudIconButton Icon="@Icons.Material.Filled.DeleteForever"
+                                                       Color="Color.Error"
+                                                       Size="Size.Small"
+                                                       Disabled="_passkeyWorking"
+                                                       OnClick="@(() => RemovePasskeyAsync(pk.CredentialId))" />
+                                    </div>
+                                </div>
+                            </MudListItem>
+                            <MudDivider />
                         }
+                    </MudList>
+                }
+            </div>
+        </MudTabPanel>
+
+
+        @* ── Account / Danger Zone ── *@
+        <MudTabPanel Text="Account" Icon="@Icons.Material.Filled.ManageAccounts">
+            <div class="pa-6 pt-8">
+
+                @* Export *@
+                <MudText Typo="Typo.subtitle1" Style="font-weight:600" Class="mb-2">Export Your Data</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+                    Download a copy of all personal data associated with your account, including profile info,
+                    active sessions, passkeys, and audit history.
+                </MudText>
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Download"
+                           Disabled="_exportingData"
+                           OnClick="ExportDataAsync">
+                    @(_exportingData ? "Preparing..." : "Download My Data")
+                </MudButton>
+
+                <MudDivider Class="my-8" />
+
+                @* Danger Zone *@
+                <MudPaper Elevation="0" Class="pa-4" Style="border:1px solid var(--mud-palette-error); border-radius:8px; max-width:600px;">
+                    <div class="d-flex align-center gap-3 mb-3">
+                        <MudIcon Icon="@Icons.Material.Filled.Warning" Color="Color.Error" />
+                        <MudText Typo="Typo.subtitle1" Style="font-weight:600; color:var(--mud-palette-error)">Delete Account</MudText>
                     </div>
-                </MudTabPanel>
-            </MudTabs>
-        </MudItem>
-    </MudGrid>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+                        Permanently deletes your account and all associated data — sessions, passkeys, profile image, and personal information.
+                        Audit log entries will be anonymised. <strong>This action cannot be undone.</strong>
+                    </MudText>
+
+                    @if (!_showDeleteConfirm)
+                    {
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Error"
+                                   StartIcon="@Icons.Material.Filled.DeleteForever"
+                                   OnClick="@(() => { _showDeleteConfirm = true; _deleteConfirmEmail = string.Empty; _deleteError = null; })">
+                            Delete My Account
+                        </MudButton>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.body2" Class="mb-3">
+                            To confirm, type your email address <strong>@_profile!.Email</strong> below.
+                        </MudText>
+                        <MudTextField @bind-Value="_deleteConfirmEmail"
+                                      Label="Confirm email"
+                                      Variant="Variant.Outlined"
+                                      Style="max-width:320px;"
+                                      autocomplete="off"
+                                      Disabled="_deletingAccount"
+                                      Class="mb-4" />
+                        @if (_deleteError is not null)
+                        {
+                            <MudAlert Severity="Severity.Error" Dense="true" Class="mb-3">@_deleteError</MudAlert>
+                        }
+                        <div class="d-flex gap-3">
+                            <MudButton Variant="Variant.Filled"
+                                       Color="Color.Error"
+                                       StartIcon="@Icons.Material.Filled.DeleteForever"
+                                       Disabled="@(_deletingAccount || _deleteConfirmEmail != _profile!.Email)"
+                                       OnClick="DeleteAccountAsync">
+                                @(_deletingAccount ? "Deleting..." : "Permanently Delete")
+                            </MudButton>
+                            <MudButton Variant="Variant.Outlined"
+                                       Color="Color.Secondary"
+                                       Disabled="_deletingAccount"
+                                       OnClick="@(() => { _showDeleteConfirm = false; _deleteConfirmEmail = string.Empty; _deleteError = null; })">
+                                Cancel
+                            </MudButton>
+                        </div>
+                    }
+                </MudPaper>
+
+            </div>
+        </MudTabPanel>
+
+    </MudTabs>
 }
 
 @code {
@@ -527,6 +729,20 @@ else if (_profile is not null)
     private string? _renamingCredentialId;
     private string _renameValue = string.Empty;
 
+    // 2FA state
+    private TwoFactorSetupInfo? _tfaSetup;
+    private bool _tfaWorking;
+    private string? _tfaError;
+    private bool _showDisableTfa;
+    private readonly TwoFactorCodeRequest _enableTfaModel = new();
+    private readonly TwoFactorCodeRequest _disableTfaModel = new();
+    // Account / GDPR state
+    private bool _exportingData;
+    private bool _showDeleteConfirm;
+    private bool _deletingAccount;
+    private string _deleteConfirmEmail = string.Empty;
+    private string? _deleteError;
+
     private DateTime? _dateOfBirth
     {
         get => _editModel.DateOfBirth;
@@ -535,8 +751,14 @@ else if (_profile is not null)
 
     protected override async Task OnInitializedAsync()
     {
-        await Task.WhenAll(LoadCountriesAsync(), LoadPasskeysAsync(), LoadSessionsAsync());
-        await LoadProfileAsync();
+        await Task.WhenAll(LoadCountriesAsync(), LoadProfileAsync());
+    }
+
+    // Tab order: 0=PersonalInfo, 1=Security, 2=TwoFactor, 3=Sessions, 4=Passkeys, 5=Account
+    private async Task OnTabChangedAsync(int index)
+    {
+        if (index == 3) await LoadSessionsAsync();
+        else if (index == 4) await LoadPasskeysAsync();
     }
 
     private async Task LoadProfileAsync()
@@ -623,7 +845,6 @@ else if (_profile is not null)
     {
         if (string.IsNullOrWhiteSpace(ua)) return "Unknown device";
 
-        // Basic UA string parsing — extract browser and OS hints
         var browser = ua.Contains("Edg/") ? "Edge"
             : ua.Contains("Chrome/") ? "Chrome"
             : ua.Contains("Firefox/") ? "Firefox"
@@ -837,6 +1058,60 @@ else if (_profile is not null)
         Snackbar.Add("Password changed successfully!", Severity.Success);
     }
 
+    private async Task LoadTfaSetupAsync()
+    {
+        _tfaWorking = true;
+        _tfaError = null;
+        var result = await AuthApi.GetTwoFactorSetupAsync();
+        _tfaWorking = false;
+
+        if (!result.IsSuccess)
+        {
+            _tfaError = result.Error;
+            return;
+        }
+
+        _tfaSetup = result.Value;
+    }
+
+    private async Task EnableTwoFactorAsync()
+    {
+        _tfaWorking = true;
+        _tfaError = null;
+        var result = await AuthApi.EnableTwoFactorAsync(_enableTfaModel.Code);
+        _tfaWorking = false;
+
+        if (!result.IsSuccess)
+        {
+            _tfaError = result.Error;
+            return;
+        }
+
+        _tfaSetup = null;
+        _enableTfaModel.Code = string.Empty;
+        Snackbar.Add("Two-factor authentication enabled!", Severity.Success);
+        await LoadProfileAsync();
+    }
+
+    private async Task DisableTwoFactorAsync()
+    {
+        _tfaWorking = true;
+        _tfaError = null;
+        var result = await AuthApi.DisableTwoFactorAsync(_disableTfaModel.Code);
+        _tfaWorking = false;
+
+        if (!result.IsSuccess)
+        {
+            _tfaError = result.Error;
+            return;
+        }
+
+        _showDisableTfa = false;
+        _disableTfaModel.Code = string.Empty;
+        Snackbar.Add("Two-factor authentication disabled.", Severity.Info);
+        await LoadProfileAsync();
+    }
+
     private string GetInitials()
     {
         if (_profile is null) return "?";
@@ -845,5 +1120,39 @@ else if (_profile is not null)
         return fn != default && ln != default
             ? $"{fn}{ln}".ToUpperInvariant()
             : _profile.UserName.Length > 0 ? _profile.UserName[..1].ToUpperInvariant() : "?";
+    }
+
+    private async Task ExportDataAsync()
+    {
+        _exportingData = true;
+        var result = await UserApi.ExportDataAsync();
+        _exportingData = false;
+
+        if (!result.IsSuccess)
+        {
+            Snackbar.Add($"Export failed: {result.Error}", Severity.Error);
+            return;
+        }
+
+        await JS.InvokeVoidAsync("downloadFileFromBytes", "account-export.json", "application/json", result.Value);
+        Snackbar.Add("Export downloaded.", Severity.Success);
+    }
+
+    private async Task DeleteAccountAsync()
+    {
+        _deletingAccount = true;
+        _deleteError = null;
+
+        var result = await UserApi.DeleteAccountAsync();
+        _deletingAccount = false;
+
+        if (!result.IsSuccess)
+        {
+            _deleteError = result.Error ?? "Account deletion failed.";
+            return;
+        }
+
+        await TokenStorage.ClearAsync();
+        Nav.NavigateTo("/?accountDeleted=true", forceLoad: true);
     }
 }

@@ -1,4 +1,5 @@
-﻿using Domain.Users;
+﻿using Domain.Audit;
+using Domain.Users;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -29,15 +30,24 @@ public sealed class ApplicationDbContext : IdentityDbContext<User>, IUnitOfWork
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<UserProfileImage> UserProfileImages => Set<UserProfileImage>();
     public DbSet<PasskeyCredential> PasskeyCredentials => Set<PasskeyCredential>();
+    public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
     // IUnitOfWork
     public async Task BeginTransactionAsync(CancellationToken cancellationToken = default)
     {
+        if (Database.ProviderName == "Microsoft.EntityFrameworkCore.InMemory") return;
         _currentTransaction ??= await Database.BeginTransactionAsync(cancellationToken);
     }
 
     public async Task CommitTransactionAsync(CancellationToken cancellationToken = default)
     {
+        // InMemory provider doesn't support transactions — just save and return.
+        if (Database.ProviderName == "Microsoft.EntityFrameworkCore.InMemory")
+        {
+            await SaveChangesAsync(cancellationToken);
+            return;
+        }
+
         if (_currentTransaction is null) return;
 
         try

@@ -1,0 +1,210 @@
+@page "/admin/logs"
+@layout MainLayout
+@attribute [Authorize(Roles = "Admin")]
+@using Microsoft.AspNetCore.Authorization
+@inject IAdminApiService AdminApi
+@inject ISnackbar Snackbar
+
+<PageTitle>Admin — Audit Logs</PageTitle>
+
+<MudText Typo="Typo.h5" Style="font-weight:600" Class="mb-1">Audit Logs</MudText>
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-6">
+    Track user and admin actions across the system.
+</MudText>
+
+@* ── Filters ──────────────────────────────────────────────────────────────── *@
+<MudPaper Elevation="2" Class="pa-4 mb-4">
+    <MudGrid Spacing="2" AlignItems="Center">
+        <MudItem xs="12" sm="4">
+            <MudTextField @bind-Value="_filterUserId"
+                          Label="User ID"
+                          Placeholder="Filter by user ID…"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Clearable="true" />
+        </MudItem>
+        <MudItem xs="12" sm="4">
+            <MudTextField @bind-Value="_filterAction"
+                          Label="Action"
+                          Placeholder="e.g. LoginSuccess…"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Clearable="true" />
+        </MudItem>
+        <MudItem xs="12" sm="2">
+            <MudDatePicker @bind-Date="_filterFrom"
+                           Label="From"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense"
+                           Clearable="true" />
+        </MudItem>
+        <MudItem xs="12" sm="2">
+            <MudDatePicker @bind-Date="_filterTo"
+                           Label="To"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense"
+                           Clearable="true" />
+        </MudItem>
+        <MudItem xs="12" Class="d-flex gap-2">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ApplyFilters">Apply</MudButton>
+            <MudButton Variant="Variant.Outlined" OnClick="ClearFilters">Clear</MudButton>
+        </MudItem>
+    </MudGrid>
+</MudPaper>
+
+@* ── Log Table ─────────────────────────────────────────────────────────────── *@
+<MudPaper Elevation="2">
+    <MudTable ServerData="LoadDataAsync"
+              @ref="_table"
+              Dense="true"
+              Hover="true"
+              Striped="true"
+              RowsPerPage="50">
+        <HeaderContent>
+            <MudTh>Timestamp</MudTh>
+            <MudTh>User</MudTh>
+            <MudTh>Action</MudTh>
+            <MudTh>Entity</MudTh>
+            <MudTh>IP Address</MudTh>
+            <MudTh>Details</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Timestamp">
+                <MudText Typo="Typo.body2" Style="white-space:nowrap">
+                    @context.Timestamp.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")
+                </MudText>
+            </MudTd>
+            <MudTd DataLabel="User">
+                @if (context.UserName is not null)
+                {
+                    <MudText Typo="Typo.body2">@context.UserName</MudText>
+                    @if (context.UserFullName is not null)
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">@context.UserFullName</MudText>
+                    }
+                }
+                else if (context.UserId is not null)
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">@context.UserId</MudText>
+                }
+                else
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Tertiary">—</MudText>
+                }
+            </MudTd>
+            <MudTd DataLabel="Action">
+                <MudChip T="string" Size="Size.Small" Color="@ActionColor(context.Action)" Variant="Variant.Filled">
+                    @context.Action
+                </MudChip>
+            </MudTd>
+            <MudTd DataLabel="Entity">
+                @if (context.EntityType is not null)
+                {
+                    <MudText Typo="Typo.body2">@context.EntityType</MudText>
+                    @if (context.EntityId is not null)
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">@context.EntityId</MudText>
+                    }
+                }
+                else
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Tertiary">—</MudText>
+                }
+            </MudTd>
+            <MudTd DataLabel="IP Address">
+                <MudText Typo="Typo.body2">@(context.IpAddress ?? "—")</MudText>
+            </MudTd>
+            <MudTd DataLabel="Details">
+                @if (context.Details is not null)
+                {
+                    <MudTooltip Text="@context.Details" Placement="Placement.Left">
+                        <MudIconButton Icon="@Icons.Material.Filled.Info"
+                                       Size="Size.Small"
+                                       Color="Color.Default" />
+                    </MudTooltip>
+                }
+                else
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Tertiary">—</MudText>
+                }
+            </MudTd>
+        </RowTemplate>
+        <NoRecordsContent>
+            <MudText Class="pa-4" Color="Color.Secondary">No audit log entries found.</MudText>
+        </NoRecordsContent>
+        <LoadingContent>
+            <MudText Class="pa-4" Color="Color.Secondary">Loading…</MudText>
+        </LoadingContent>
+        <PagerContent>
+            <MudTablePager PageSizeOptions="new[] { 25, 50, 100 }" />
+        </PagerContent>
+    </MudTable>
+</MudPaper>
+
+@code {
+    private MudTable<AuditLogDto>? _table;
+
+    private string? _filterUserId;
+    private string? _filterAction;
+    private DateTime? _filterFrom;
+    private DateTime? _filterTo;
+
+    // Applied filter values (only update on "Apply")
+    private string? _appliedUserId;
+    private string? _appliedAction;
+    private DateTime? _appliedFrom;
+    private DateTime? _appliedTo;
+
+    private async Task<TableData<AuditLogDto>> LoadDataAsync(TableState state, CancellationToken ct)
+    {
+        var page = state.Page + 1;
+        var pageSize = state.PageSize;
+
+        var result = await AdminApi.GetLogsAsync(page, pageSize, _appliedUserId, _appliedAction, _appliedFrom, _appliedTo);
+        if (!result.IsSuccess)
+        {
+            Snackbar.Add(result.Error ?? "Failed to load audit logs.", Severity.Error);
+            return new TableData<AuditLogDto> { Items = [], TotalItems = 0 };
+        }
+
+        var data = result.Value!;
+        return new TableData<AuditLogDto> { Items = data.Items, TotalItems = data.TotalCount };
+    }
+
+    private async Task ApplyFilters()
+    {
+        _appliedUserId = string.IsNullOrWhiteSpace(_filterUserId) ? null : _filterUserId.Trim();
+        _appliedAction = string.IsNullOrWhiteSpace(_filterAction) ? null : _filterAction.Trim();
+        _appliedFrom = _filterFrom;
+        _appliedTo = _filterTo;
+        if (_table is not null) await _table.ReloadServerData();
+    }
+
+    private async Task ClearFilters()
+    {
+        _filterUserId = null;
+        _filterAction = null;
+        _filterFrom = null;
+        _filterTo = null;
+        _appliedUserId = null;
+        _appliedAction = null;
+        _appliedFrom = null;
+        _appliedTo = null;
+        if (_table is not null) await _table.ReloadServerData();
+    }
+
+    private static Color ActionColor(string action) => action switch
+    {
+        "LoginSuccess" => Color.Success,
+        "LoginFailed" => Color.Error,
+        "Logout" => Color.Default,
+        "Register" => Color.Info,
+        "EmailConfirmed" => Color.Info,
+        "PasswordChanged" or "PasswordResetRequested" or "PasswordReset" => Color.Warning,
+        "SessionRevoked" or "AllSessionsRevoked" => Color.Warning,
+        "RoleAssigned" or "RoleRemoved" => Color.Secondary,
+        "PasskeyAdded" or "PasskeyRemoved" => Color.Tertiary,
+        "ProfileUpdated" => Color.Default,
+        _ => Color.Default
+    };
+}

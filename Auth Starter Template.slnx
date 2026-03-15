@@ -2,6 +2,9 @@
   <Folder Name="/scripts/">
     <File Path="sql scripts/InsertAppCountries.sql" />
   </Folder>
+  <Folder Name="/Solution Items/">
+    <File Path="Directory.Packages.props" />
+  </Folder>
   <Folder Name="/src/">
     <Project Path="src/Api/Api.csproj" />
     <Project Path="src/Application/Application.csproj" />
@@ -9,5 +12,9 @@
     <Project Path="src/Infrastructure/Infrastructure.csproj" />
     <Project Path="src/SharedKernel/SharedKernel.csproj" />
     <Project Path="WebClient/WebClient.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Unit/Unit.Tests.csproj" />
+    <Project Path="tests/Integration/Integration.Tests.csproj" />
   </Folder>
 </Solution>

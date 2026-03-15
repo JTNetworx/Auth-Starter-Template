@@ -64,6 +64,12 @@ public sealed class JwtAuthenticationStateProvider : AuthenticationStateProvider
         if (string.IsNullOrWhiteSpace(refreshToken))
             return null;
 
+        // Re-check: another concurrent call (e.g. AuthHttpMessageHandler) may have already
+        // completed the refresh while we were waiting. If the stored token is now valid, use it.
+        var existingToken = await _tokenStorage.GetAccessTokenAsync();
+        if (!string.IsNullOrWhiteSpace(existingToken) && !IsTokenExpired(existingToken))
+            return existingToken;
+
         try
         {
             using var client = _httpClientFactory.CreateClient("public");

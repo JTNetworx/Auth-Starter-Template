@@ -10,4 +10,7 @@ public interface IUserApiService
     Task<ApiResult<List<SessionDto>>> GetSessionsAsync();
     Task<ApiResult> RevokeSessionAsync(Guid sessionId);
     Task<ApiResult> RevokeAllOtherSessionsAsync();
+
+    Task<ApiResult> DeleteAccountAsync();
+    Task<ApiResult<byte[]>> ExportDataAsync();
 }

@@ -134,6 +134,38 @@ public sealed class UserApiService : IUserApiService
         }
     }
 
+    public async Task<ApiResult> DeleteAccountAsync()
+    {
+        try
+        {
+            var response = await _http.DeleteAsync("users/me");
+            return response.IsSuccessStatusCode
+                ? ApiResult.Success()
+                : ApiResult.Failure(await ReadErrorAsync(response));
+        }
+        catch (Exception ex)
+        {
+            return ApiResult.Failure(ex.Message);
+        }
+    }
+
+    public async Task<ApiResult<byte[]>> ExportDataAsync()
+    {
+        try
+        {
+            var response = await _http.GetAsync("users/me/export");
+            if (!response.IsSuccessStatusCode)
+                return ApiResult<byte[]>.Failure(await ReadErrorAsync(response));
+
+            var bytes = await response.Content.ReadAsByteArrayAsync();
+            return ApiResult<byte[]>.Success(bytes);
+        }
+        catch (Exception ex)
+        {
+            return ApiResult<byte[]>.Failure(ex.Message);
+        }
+    }
+
     private static async Task<string> ReadErrorAsync(HttpResponseMessage response)
     {
         try

@@ -1,0 +1,145 @@
+@page "/admin/users"
+@layout MainLayout
+@attribute [Authorize(Roles = "Admin")]
+@using Microsoft.AspNetCore.Authorization
+@inject IAdminApiService AdminApi
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+<PageTitle>Admin — Users</PageTitle>
+
+<MudText Typo="Typo.h5" Style="font-weight:600" Class="mb-1">User Management</MudText>
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-6">
+    Manage user accounts, roles, and sessions.
+</MudText>
+
+<MudPaper Elevation="2" Class="pa-4 mb-4">
+    <MudGrid Spacing="2" AlignItems="Center">
+        <MudItem xs="12" sm="8">
+            <MudTextField @bind-Value="_search"
+                          Placeholder="Search by name or email…"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          Immediate="true"
+                          DebounceInterval="400"
+                          OnDebounceIntervalElapsed="ReloadTable"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense" />
+        </MudItem>
+        <MudItem xs="12" sm="4" Class="d-flex justify-end">
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="align-self-center">
+                @(_totalCount > 0 ? $"{_totalCount} users" : "")
+            </MudText>
+        </MudItem>
+    </MudGrid>
+</MudPaper>
+
+<MudTable ServerData="LoadDataAsync"
+          @ref="_table"
+          Hover="true"
+          Dense="false"
+          Striped="false"
+          Elevation="2"
+          RowClass="cursor-pointer"
+          OnRowClick="@(row => Nav.NavigateTo($"/admin/users/{row.Item.Id}"))"
+          T="AdminUserSummaryDto">
+    <HeaderContent>
+        <MudTh>Name</MudTh>
+        <MudTh>Email</MudTh>
+        <MudTh>Roles</MudTh>
+        <MudTh>Status</MudTh>
+        <MudTh>Last Login</MudTh>
+        <MudTh>Joined</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="Name">
+            <MudText Typo="Typo.body2" Style="font-weight:600">@context.FullName</MudText>
+        </MudTd>
+        <MudTd DataLabel="Email">
+            <div class="d-flex align-center gap-1">
+                <MudText Typo="Typo.body2">@context.Email</MudText>
+                @if (!context.EmailConfirmed)
+                {
+                    <MudTooltip Text="Email not confirmed">
+                        <MudIcon Icon="@Icons.Material.Filled.MarkEmailUnread"
+                                 Size="Size.Small" Color="Color.Warning" />
+                    </MudTooltip>
+                }
+            </div>
+        </MudTd>
+        <MudTd DataLabel="Roles">
+            <div class="d-flex gap-1 flex-wrap">
+                @foreach (var role in context.Roles)
+                {
+                    <MudChip T="string"
+                             Color="@(role == "Admin" ? Color.Error : Color.Primary)"
+                             Size="Size.Small" Class="my-0">@role</MudChip>
+                }
+            </div>
+        </MudTd>
+        <MudTd DataLabel="Status">
+            @if (context.IsLockedOut)
+            {
+                <MudChip T="string" Color="Color.Error" Size="Size.Small" Class="my-0"
+                         Icon="@Icons.Material.Filled.Lock">Locked</MudChip>
+            }
+            else
+            {
+                <MudChip T="string" Color="Color.Success" Size="Size.Small" Class="my-0"
+                         Icon="@Icons.Material.Filled.CheckCircle">Active</MudChip>
+            }
+        </MudTd>
+        <MudTd DataLabel="Last Login">
+            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                @(context.LastLoginUtc.HasValue
+                    ? context.LastLoginUtc.Value.ToLocalTime().ToString("g")
+                    : "Never")
+            </MudText>
+        </MudTd>
+        <MudTd DataLabel="Joined">
+            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                @context.CreatedAtUtc.ToLocalTime().ToString("d")
+            </MudText>
+        </MudTd>
+    </RowTemplate>
+    <NoRecordsContent>
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="pa-4">No users found.</MudText>
+    </NoRecordsContent>
+    <LoadingContent>
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="pa-4">Loading…</MudText>
+    </LoadingContent>
+    <PagerContent>
+        <MudTablePager PageSizeOptions="[10, 20, 50]" />
+    </PagerContent>
+</MudTable>
+
+@code {
+    private MudTable<AdminUserSummaryDto> _table = null!;
+    private string? _search;
+    private int _totalCount;
+
+    private async Task<TableData<AdminUserSummaryDto>> LoadDataAsync(TableState state, CancellationToken ct)
+    {
+        var page = state.Page + 1; // MudTable is 0-based
+        var result = await AdminApi.GetUsersAsync(page, state.PageSize, _search);
+
+        if (!result.IsSuccess)
+        {
+            Snackbar.Add(result.Error ?? "Failed to load users.", Severity.Error);
+            return new TableData<AdminUserSummaryDto> { Items = [], TotalItems = 0 };
+        }
+
+        _totalCount = result.Value!.TotalCount;
+        return new TableData<AdminUserSummaryDto>
+        {
+            Items = result.Value.Items,
+            TotalItems = result.Value.TotalCount
+        };
+    }
+
+    private async Task ReloadTable()
+    {
+        if (_table is not null)
+            await _table.ReloadServerData();
+    }
+}

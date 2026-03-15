@@ -3,12 +3,14 @@ using Application.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using QRCoder;
 using System.Security.Claims;
 
 namespace Api.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
+[Produces("application/json")]
 public class AuthController : ControllerBase
 {
     private readonly IAuthService _authService;
@@ -20,6 +22,9 @@ public class AuthController : ControllerBase
 
     [AllowAnonymous]
     [EnableRateLimiting("auth")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
     [HttpPost("register")]
     public async Task<IActionResult> RegisterAsync([FromBody] RegisterDto dto)
     {
@@ -32,6 +37,9 @@ public class AuthController : ControllerBase
 
     [AllowAnonymous]
     [EnableRateLimiting("auth")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
     [HttpPost("login")]
     public async Task<IActionResult> LoginAsync([FromBody] LoginDto dto)
     {
@@ -39,11 +47,18 @@ public class AuthController : ControllerBase
         if (result.IsFailure)
             return Unauthorized(new { result.Error });
 
-        return Ok(result.Value);
+        var loginResult = result.Value!;
+
+        if (loginResult.RequiresTwoFactor)
+            return Ok(new { requiresTwoFactor = true, userId = loginResult.UserId });
+
+        return Ok(new TokenDto(loginResult.AccessToken!, loginResult.RefreshToken!));
     }
 
     [AllowAnonymous]
     [EnableRateLimiting("auth")]
+    [ProducesResponseType(typeof(TokenDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [HttpPost("refresh")]
     public async Task<IActionResult> RefreshAsync([FromBody] string refreshToken)
     {
@@ -54,7 +69,9 @@ public class AuthController : ControllerBase
         return Ok(result.Value);
     }
 
-    [Authorize]
+    [AllowAnonymous]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [HttpPost("logout")]
     public async Task<IActionResult> LogoutAsync([FromBody] string refreshToken)
     {
@@ -67,6 +84,8 @@ public class AuthController : ControllerBase
 
     [AllowAnonymous]
     [EnableRateLimiting("auth")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [HttpGet("confirm-email")]
     public async Task<IActionResult> ConfirmEmailAsync([FromQuery] string userId, [FromQuery] string token)
     {
@@ -79,6 +98,9 @@ public class AuthController : ControllerBase
 
     [Authorize]
     [EnableRateLimiting("auth")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [HttpPost("change-password")]
     public async Task<IActionResult> ChangePasswordAsync([FromBody] ChangePasswordDto dto)
     {
@@ -94,6 +116,8 @@ public class AuthController : ControllerBase
 
     [AllowAnonymous]
     [EnableRateLimiting("forgot-password")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
     [HttpPost("forgot-password")]
     public async Task<IActionResult> ForgotPasswordAsync([FromBody] ForgotPasswordDto dto)
     {
@@ -104,6 +128,8 @@ public class AuthController : ControllerBase
 
     [AllowAnonymous]
     [EnableRateLimiting("auth")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [HttpPost("reset-password")]
     public async Task<IActionResult> ResetPasswordAsync([FromBody] ResetPasswordDto dto)
     {
@@ -112,5 +138,101 @@ public class AuthController : ControllerBase
             return BadRequest(new { result.Error });
 
         return Ok(new { message = "Password has been reset successfully" });
+    }
+
+    // ── Two-Factor Authentication ─────────────────────────────────────────────
+
+    /// <summary>
+    /// Returns the authenticator key and a base64 PNG QR code for the user to scan.
+    /// Generates a new key if the user does not have one yet.
+    /// </summary>
+    [Authorize]
+    [ProducesResponseType(typeof(TwoFactorSetupDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [HttpGet("2fa/setup")]
+    public async Task<IActionResult> GetTwoFactorSetupAsync()
+    {
+        var userId = User.FindFirstValue("sub");
+        if (userId is null) return Unauthorized();
+
+        var result = await _authService.GetTwoFactorSetupAsync(userId);
+        if (result.IsFailure)
+            return BadRequest(new { result.Error });
+
+        var setup = result.Value!;
+        var qrCodeBase64 = GenerateQrCodeBase64(setup.AuthenticatorUri);
+
+        return Ok(new TwoFactorSetupDto(setup.SharedKey, setup.AuthenticatorUri, qrCodeBase64));
+    }
+
+    /// <summary>
+    /// Verifies the first TOTP code from the authenticator app and enables 2FA.
+    /// </summary>
+    [Authorize]
+    [EnableRateLimiting("auth")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [HttpPost("2fa/enable")]
+    public async Task<IActionResult> EnableTwoFactorAsync([FromBody] TwoFactorCodeDto dto)
+    {
+        var userId = User.FindFirstValue("sub");
+        if (userId is null) return Unauthorized();
+
+        var result = await _authService.EnableTwoFactorAsync(userId, dto);
+        if (result.IsFailure)
+            return BadRequest(new { result.Error });
+
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Verifies the current TOTP code, disables 2FA, and resets the authenticator key.
+    /// </summary>
+    [Authorize]
+    [EnableRateLimiting("auth")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [HttpPost("2fa/disable")]
+    public async Task<IActionResult> DisableTwoFactorAsync([FromBody] TwoFactorCodeDto dto)
+    {
+        var userId = User.FindFirstValue("sub");
+        if (userId is null) return Unauthorized();
+
+        var result = await _authService.DisableTwoFactorAsync(userId, dto);
+        if (result.IsFailure)
+            return BadRequest(new { result.Error });
+
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Completes a 2FA login. Called after POST /auth/login returns requiresTwoFactor=true.
+    /// </summary>
+    [AllowAnonymous]
+    [EnableRateLimiting("auth")]
+    [ProducesResponseType(typeof(TokenDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [HttpPost("2fa/verify")]
+    public async Task<IActionResult> VerifyTwoFactorAsync([FromBody] TwoFactorVerifyDto dto)
+    {
+        var result = await _authService.VerifyTwoFactorAsync(dto);
+        if (result.IsFailure)
+            return Unauthorized(new { result.Error });
+
+        return Ok(result.Value);
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private static string GenerateQrCodeBase64(string content)
+    {
+        using var generator = new QRCodeGenerator();
+        var data = generator.CreateQrCode(content, QRCodeGenerator.ECCLevel.Q);
+        var qrCode = new PngByteQRCode(data);
+        var bytes = qrCode.GetGraphic(5);
+        return Convert.ToBase64String(bytes);
     }
 }

@@ -6,6 +6,7 @@ namespace Api.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
+[Produces("application/json")]
 public class CountriesController : ControllerBase
 {
     private readonly IAppCountryService _appCountryService;
@@ -15,6 +16,7 @@ public class CountriesController : ControllerBase
         _appCountryService = appCountryService;
     }
 
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [HttpGet]
     public async Task<IActionResult> GetAllCountriesAsync()
     {

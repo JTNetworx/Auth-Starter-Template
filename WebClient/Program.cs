@@ -39,6 +39,7 @@ builder.Services.AddScoped<IAuthApiService, AuthApiService>();
 builder.Services.AddScoped<IUserApiService, UserApiService>();
 builder.Services.AddScoped<ICountryApiService, CountryApiService>();
 builder.Services.AddScoped<IPasskeyApiService, PasskeyApiService>();
+builder.Services.AddScoped<IAdminApiService, AdminApiService>();
 
 // ── App Services ──────────────────────────────────────────────────────────────
 

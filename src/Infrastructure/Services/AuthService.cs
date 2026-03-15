@@ -1,3 +1,4 @@
+using Application;
 using Application.DTOs.Auth;
 using Application.Services;
 using Domain.Users;
@@ -7,6 +8,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.WebUtilities;
 using SharedKernel;
 using System.Text;
+using System.Text.Encodings.Web;
 
 namespace Infrastructure.Services;
 
@@ -20,6 +22,7 @@ public sealed class AuthService : IAuthService
     private readonly IUnitOfWork _uow;
     private readonly IDateTimeProvider _dateTime;
     private readonly IHttpContextAccessor _httpContextAccessor;
+    private readonly IAuditLogService _audit;
 
     public AuthService(
         UserManager<User> userManager,
@@ -29,7 +32,8 @@ public sealed class AuthService : IAuthService
         IAppEmailSender emailSender,
         IUnitOfWork uow,
         IDateTimeProvider dateTime,
-        IHttpContextAccessor httpContextAccessor)
+        IHttpContextAccessor httpContextAccessor,
+        IAuditLogService audit)
     {
         _userManager = userManager;
         _roleManager = roleManager;
@@ -39,6 +43,7 @@ public sealed class AuthService : IAuthService
         _uow = uow;
         _dateTime = dateTime;
         _httpContextAccessor = httpContextAccessor;
+        _audit = audit;
     }
 
     private string? GetClientIp() =>
@@ -67,7 +72,7 @@ public sealed class AuthService : IAuthService
             var errors = string.Join("; ", result.Errors.Select(e => e.Description));
             return Result.Failure(errors);
         }
-        
+
         var roleExists = await _roleManager.RoleExistsAsync("User");
         if (!roleExists)
             await _roleManager.CreateAsync(new IdentityRole("User"));
@@ -83,43 +88,42 @@ public sealed class AuthService : IAuthService
         var encodedToken = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(confirmToken));
         await _emailSender.SendEmailConfirmationAsync(user.Email!, user.UserName!, user.Id, encodedToken);
 
+        await _audit.RecordAsync(user.Id, AuditActions.Register, entityType: "User", entityId: user.Id);
         return Result.Success();
     }
 
-    public async Task<Result<TokenDto>> LoginAsync(LoginDto dto)
+    public async Task<Result<LoginResultDto>> LoginAsync(LoginDto dto)
     {
         var user = await _userManager.FindByNameAsync(dto.UserName)
                    ?? await _userManager.FindByEmailAsync(dto.UserName);
 
         if (user is null)
-            return Result.Failure<TokenDto>("Invalid credentials");
+            return Result.Failure<LoginResultDto>("Invalid credentials");
 
         if (await _userManager.IsLockedOutAsync(user))
-            return Result.Failure<TokenDto>("Account is locked. Try again later.");
+            return Result.Failure<LoginResultDto>("Account is locked. Try again later.");
 
         if (!await _userManager.CheckPasswordAsync(user, dto.Password))
         {
             await _userManager.AccessFailedAsync(user);
-            return Result.Failure<TokenDto>("Invalid credentials");
+            await _audit.RecordAsync(user.Id, AuditActions.LoginFailed, details: new { Reason = "InvalidPassword" });
+            return Result.Failure<LoginResultDto>("Invalid credentials");
         }
 
         if (!user.EmailConfirmed)
-            return Result.Failure<TokenDto>("Email address has not been confirmed");
+        {
+            await _audit.RecordAsync(user.Id, AuditActions.LoginFailed, details: new { Reason = "EmailNotConfirmed" });
+            return Result.Failure<LoginResultDto>("Email address has not been confirmed");
+        }
 
         await _userManager.ResetAccessFailedCountAsync(user);
 
-        var newRefreshToken = _tokenService.GenerateRefreshToken(user.Id, GetClientIp(), GetUserAgent());
-        var roles = await _userManager.GetRolesAsync(user);
-        var accessToken = await _tokenService.GenerateAccessToken(user, roles, newRefreshToken.Id);
+        // If 2FA is enabled, pause here — the client must supply a TOTP code before tokens are issued.
+        if (user.TwoFactorEnabled)
+            return Result.Success(new LoginResultDto(RequiresTwoFactor: true, UserId: user.Id, AccessToken: null, RefreshToken: null));
 
-        // Atomic: update LastLoginUtc and persist the new refresh token together.
-        await _uow.BeginTransactionAsync();
-        user.LastLoginUtc = _dateTime.UtcNow;
-        await _userManager.UpdateAsync(user);
-        await _tokenRepository.SaveRefreshTokenAsync(newRefreshToken);
-        await _uow.CommitTransactionAsync();
-
-        return Result.Success(new TokenDto(accessToken, newRefreshToken.Token));
+        var tokens = await IssueTokensAsync(user);
+        return Result.Success(new LoginResultDto(RequiresTwoFactor: false, UserId: null, tokens.AccessToken, tokens.RefreshToken));
     }
 
     public async Task<Result<TokenDto>> RefreshTokenAsync(string refreshToken)
@@ -172,7 +176,7 @@ public sealed class AuthService : IAuthService
         storedToken.RevokedAtUtc = _dateTime.UtcNow;
         await _tokenRepository.UpdateRefreshTokenAsync(storedToken);
         await _uow.SaveChangesAsync();
-
+        await _audit.RecordAsync(storedToken.UserId, AuditActions.Logout);
         return Result.Success();
     }
 
@@ -193,6 +197,7 @@ public sealed class AuthService : IAuthService
             return Result.Failure(errors);
         }
 
+        await _audit.RecordAsync(userId, AuditActions.EmailConfirmed, entityType: "User", entityId: userId);
         return Result.Success();
     }
 
@@ -212,6 +217,7 @@ public sealed class AuthService : IAuthService
             return Result.Failure(errors);
         }
 
+        await _audit.RecordAsync(userId, AuditActions.PasswordChanged);
         return Result.Success();
     }
 
@@ -226,7 +232,7 @@ public sealed class AuthService : IAuthService
         var token = await _userManager.GeneratePasswordResetTokenAsync(user);
         var encodedToken = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(token));
         await _emailSender.SendPasswordResetAsync(user.Email!, user.UserName!, encodedToken);
-
+        await _audit.RecordAsync(user.Id, AuditActions.PasswordResetRequested);
         return Result.Success();
     }
 
@@ -250,6 +256,7 @@ public sealed class AuthService : IAuthService
             return Result.Failure(errors);
         }
 
+        await _audit.RecordAsync(user.Id, AuditActions.PasswordReset);
         return Result.Success();
     }
 
@@ -277,7 +284,7 @@ public sealed class AuthService : IAuthService
         token.RevokedAtUtc = _dateTime.UtcNow;
         await _tokenRepository.UpdateRefreshTokenAsync(token);
         await _uow.SaveChangesAsync();
-
+        await _audit.RecordAsync(userId, AuditActions.SessionRevoked, entityType: "Session", entityId: sessionId.ToString());
         return Result.Success();
     }
 
@@ -285,7 +292,127 @@ public sealed class AuthService : IAuthService
     {
         await _tokenRepository.DeleteAllRefreshTokensForUserAsync(userId, excludeId: currentSessionId);
         await _uow.SaveChangesAsync();
-
+        await _audit.RecordAsync(userId, AuditActions.AllSessionsRevoked);
         return Result.Success();
     }
+
+    // ── Two-Factor Authentication ─────────────────────────────────────────────
+
+    public async Task<Result<TwoFactorSetupDto>> GetTwoFactorSetupAsync(string userId)
+    {
+        var user = await _userManager.FindByIdAsync(userId);
+        if (user is null)
+            return Result.Failure<TwoFactorSetupDto>("User not found");
+
+        // Load or generate the authenticator key.
+        var unformattedKey = await _userManager.GetAuthenticatorKeyAsync(user);
+        if (string.IsNullOrEmpty(unformattedKey))
+        {
+            await _userManager.ResetAuthenticatorKeyAsync(user);
+            unformattedKey = await _userManager.GetAuthenticatorKeyAsync(user);
+        }
+
+        var sharedKey = FormatAuthenticatorKey(unformattedKey!);
+        var email = await _userManager.GetEmailAsync(user) ?? user.UserName ?? userId;
+        var authenticatorUri = GenerateAuthenticatorUri(email, unformattedKey!);
+
+        return Result.Success(new TwoFactorSetupDto(sharedKey, authenticatorUri, string.Empty));
+    }
+
+    public async Task<Result> EnableTwoFactorAsync(string userId, TwoFactorCodeDto dto)
+    {
+        var user = await _userManager.FindByIdAsync(userId);
+        if (user is null)
+            return Result.Failure("User not found");
+
+        var code = dto.Code.Replace(" ", "").Replace("-", "");
+        var isValid = await _userManager.VerifyTwoFactorTokenAsync(
+            user, _userManager.Options.Tokens.AuthenticatorTokenProvider, code);
+
+        if (!isValid)
+            return Result.Failure("Invalid verification code. Please check your authenticator app and try again.");
+
+        await _userManager.SetTwoFactorEnabledAsync(user, true);
+        await _audit.RecordAsync(userId, AuditActions.TwoFactorEnabled);
+        return Result.Success();
+    }
+
+    public async Task<Result> DisableTwoFactorAsync(string userId, TwoFactorCodeDto dto)
+    {
+        var user = await _userManager.FindByIdAsync(userId);
+        if (user is null)
+            return Result.Failure("User not found");
+
+        var code = dto.Code.Replace(" ", "").Replace("-", "");
+        var isValid = await _userManager.VerifyTwoFactorTokenAsync(
+            user, _userManager.Options.Tokens.AuthenticatorTokenProvider, code);
+
+        if (!isValid)
+            return Result.Failure("Invalid verification code. Please check your authenticator app and try again.");
+
+        await _userManager.SetTwoFactorEnabledAsync(user, false);
+        await _userManager.ResetAuthenticatorKeyAsync(user);
+        await _audit.RecordAsync(userId, AuditActions.TwoFactorDisabled);
+        return Result.Success();
+    }
+
+    public async Task<Result<TokenDto>> VerifyTwoFactorAsync(TwoFactorVerifyDto dto)
+    {
+        var user = await _userManager.FindByIdAsync(dto.UserId);
+        if (user is null || !user.TwoFactorEnabled)
+            return Result.Failure<TokenDto>("Invalid request");
+
+        if (await _userManager.IsLockedOutAsync(user))
+            return Result.Failure<TokenDto>("Account is locked. Try again later.");
+
+        var code = dto.Code.Replace(" ", "").Replace("-", "");
+        var isValid = await _userManager.VerifyTwoFactorTokenAsync(
+            user, _userManager.Options.Tokens.AuthenticatorTokenProvider, code);
+
+        if (!isValid)
+        {
+            await _userManager.AccessFailedAsync(user);
+            await _audit.RecordAsync(user.Id, AuditActions.LoginFailed, details: new { Reason = "InvalidTotpCode" });
+            return Result.Failure<TokenDto>("Invalid verification code.");
+        }
+
+        await _userManager.ResetAccessFailedCountAsync(user);
+        var tokens = await IssueTokensAsync(user);
+        return Result.Success(tokens);
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /// <summary>Issues access + refresh tokens and updates LastLoginUtc atomically.</summary>
+    private async Task<TokenDto> IssueTokensAsync(User user)
+    {
+        var newRefreshToken = _tokenService.GenerateRefreshToken(user.Id, GetClientIp(), GetUserAgent());
+        var roles = await _userManager.GetRolesAsync(user);
+        var accessToken = await _tokenService.GenerateAccessToken(user, roles, newRefreshToken.Id);
+
+        await _uow.BeginTransactionAsync();
+        user.LastLoginUtc = _dateTime.UtcNow;
+        await _userManager.UpdateAsync(user);
+        await _tokenRepository.SaveRefreshTokenAsync(newRefreshToken);
+        await _uow.CommitTransactionAsync();
+
+        return new TokenDto(accessToken, newRefreshToken.Token);
+    }
+
+    /// <summary>Formats a raw base32 key into space-separated 4-char groups for readability.</summary>
+    private static string FormatAuthenticatorKey(string unformattedKey)
+    {
+        var result = new StringBuilder();
+        for (var i = 0; i < unformattedKey.Length; i++)
+        {
+            if (i > 0 && i % 4 == 0) result.Append(' ');
+            result.Append(char.ToUpperInvariant(unformattedKey[i]));
+        }
+        return result.ToString();
+    }
+
+    /// <summary>Builds the otpauth:// URI that authenticator apps scan or import.</summary>
+    private static string GenerateAuthenticatorUri(string email, string unformattedKey) =>
+        $"otpauth://totp/{UrlEncoder.Default.Encode("Auth Starter")}:{UrlEncoder.Default.Encode(email)}" +
+        $"?secret={unformattedKey}&issuer={UrlEncoder.Default.Encode("Auth Starter")}&digits=6";
 }

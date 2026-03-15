@@ -8,6 +8,7 @@ namespace Api.Controllers;
 
 [Route("api/auth/passkey")]
 [ApiController]
+[Produces("application/json")]
 public class PasskeyController : ControllerBase
 {
     private readonly IPasskeyService _passkeyService;
@@ -22,6 +23,8 @@ public class PasskeyController : ControllerBase
     // -------------------------------------------------------------------------
 
     [AllowAnonymous]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [HttpPost("login/begin")]
     public async Task<IActionResult> BeginLoginAsync([FromBody] PasskeyBeginLoginDto dto)
     {
@@ -33,6 +36,8 @@ public class PasskeyController : ControllerBase
     }
 
     [AllowAnonymous]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [HttpPost("login/complete")]
     public async Task<IActionResult> CompleteLoginAsync([FromBody] PasskeyCompleteLoginDto dto)
     {
@@ -47,6 +52,9 @@ public class PasskeyController : ControllerBase
     // -------------------------------------------------------------------------
 
     [Authorize]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [HttpPost("register/begin")]
     public async Task<IActionResult> BeginRegistrationAsync()
     {
@@ -60,6 +68,9 @@ public class PasskeyController : ControllerBase
     }
 
     [Authorize]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [HttpPost("register/complete")]
     public async Task<IActionResult> CompleteRegistrationAsync([FromBody] PasskeyCompleteRegistrationDto dto)
     {
@@ -77,6 +88,8 @@ public class PasskeyController : ControllerBase
     // -------------------------------------------------------------------------
 
     [Authorize]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [HttpGet]
     public async Task<IActionResult> GetPasskeysAsync()
     {
@@ -90,6 +103,9 @@ public class PasskeyController : ControllerBase
     }
 
     [Authorize]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [HttpPut("rename")]
     public async Task<IActionResult> RenamePasskeyAsync([FromBody] PasskeyRenameDto dto)
     {
@@ -103,6 +119,9 @@ public class PasskeyController : ControllerBase
     }
 
     [Authorize]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [HttpDelete]
     public async Task<IActionResult> RemovePasskeyAsync([FromQuery] string credentialId)
     {
