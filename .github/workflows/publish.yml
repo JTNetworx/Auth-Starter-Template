@@ -1,0 +1,57 @@
+name: Publish to NuGet
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version being published (e.g. 1.0.2)'
+        required: true
+
+jobs:
+  publish:
+    name: Pack, Sign, and Publish
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Pack
+        run: dotnet pack pack/template-pack.csproj -c Release -o ./release-artifacts
+
+      - name: Sign with Azure Trusted Signing
+        uses: azure/trusted-signing-action@v0.3.20
+        with:
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          endpoint: ${{ secrets.TRUSTED_SIGNING_ENDPOINT }}
+          trusted-signing-account-name: ${{ secrets.TRUSTED_SIGNING_ACCOUNT_NAME }}
+          certificate-profile-name: ${{ secrets.TRUSTED_SIGNING_CERT_PROFILE }}
+          files-folder: ${{ github.workspace }}/release-artifacts
+          files-folder-filter: nupkg
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
+      - name: Push to NuGet
+        run: |
+          dotnet nuget push "release-artifacts/*.nupkg" \
+            --api-key ${{ secrets.NUGET_API_KEY }} \
+            --source https://api.nuget.org/v3/index.json \
+            --skip-duplicate
+
+      - name: Upload signed package as artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: signed-nupkg
+          path: release-artifacts/*.nupkg
