@@ -12,7 +12,7 @@
     <PackageProjectUrl>https://github.com/JohnThomasJTN/Auth-Starter-Template</PackageProjectUrl>
     <RepositoryUrl>https://github.com/JohnThomasJTN/Auth-Starter-Template</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageIcon>icon.png</PackageIcon>
+    <PackageIcon>icon-192.png</PackageIcon>
     <IncludeContentInPack>true</IncludeContentInPack>
     <IncludeBuildOutput>false</IncludeBuildOutput>
     <ContentTargetFolders>content</ContentTargetFolders>
@@ -25,7 +25,7 @@
   <ItemGroup>
     <Content Include="**\*"
              Exclude="**\bin\**;**\obj\**;**\.git\**;**\.vs\**;**\.claude\**;**\logs\**;**\TestResults\**;**\*.user;**\*.suo;template-pack.csproj" />
-    <Content Include="assets\icon.png" PackagePath="\" />
+    <Content Include="assets\icon-192.png" PackagePath="\" />
   </ItemGroup>
 
 </Project>
