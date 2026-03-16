@@ -1,7 +1,7 @@
 # ASP.NET Core Auth Starter
 
 [![CI](https://github.com/JohnThomasJTN/Auth-Starter-Template/actions/workflows/ci.yml/badge.svg)](https://github.com/JohnThomasJTN/Auth-Starter-Template/actions/workflows/ci.yml)
-[![NuGet](https://img.shields.io/nuget/v/JohnThomas.AuthStarterTemplate?label=nuget)](https://www.nuget.org/packages/JohnThomas.AuthStarterTemplate)
+[![NuGet](https://img.shields.io/nuget/v/JTNetworx.AuthStarterTemplate?label=nuget)](https://www.nuget.org/packages/JTNetworx.AuthStarterTemplate)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE.txt)
 [![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)](https://dotnet.microsoft.com/download/dotnet/10.0)
 
@@ -14,7 +14,7 @@ A production-ready, full-stack authentication starter built on **.NET 10**, **Bl
 ### Install as a `dotnet new` template
 
 ```bash
-dotnet new install JohnThomas.AuthStarterTemplate
+dotnet new install JTNetworx.AuthStarterTemplate
 dotnet new auth-starter -n MyApp
 cd MyApp
 ```
@@ -386,7 +386,7 @@ The template package is built from `pack/template-pack.csproj`:
 
 ```bash
 dotnet pack pack/template-pack.csproj -c Release -o ./release-artifacts
-dotnet nuget push release-artifacts/JohnThomas.AuthStarterTemplate.*.nupkg \
+dotnet nuget push release-artifacts/JTNetworx.AuthStarterTemplate.*.nupkg \
   --api-key YOUR_NUGET_API_KEY \
   --source https://api.nuget.org/v3/index.json
 ```

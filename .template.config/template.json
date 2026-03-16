@@ -8,7 +8,7 @@
     "Clean Architecture",
     "Authentication"
   ],
-  "identity": "JohnThomas.AuthStarterTemplate.CSharp",
+  "identity": "JTNetworx.AuthStarterTemplate.CSharp",
   "name": "ASP.NET Core Auth Starter",
   "shortName": "auth-starter",
   "description": "Full-stack auth starter: ASP.NET Core 10 API + Blazor WASM, Clean Architecture, JWT + refresh tokens, passkeys (WebAuthn), roles, admin panel, audit log, 2FA, GDPR, rate limiting, idempotency, correlation IDs, output caching, SignalR notifications, and localization.",
