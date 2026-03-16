@@ -385,3 +385,4 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsdrelease-artifacts/
+AZURE_SIGNING_SETUP.md
