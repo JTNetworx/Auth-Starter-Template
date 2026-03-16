@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <PackageType>Template</PackageType>
-    <PackageVersion>1.0.0</PackageVersion>
+    <PackageVersion>1.0.1</PackageVersion>
     <PackageId>JohnThomas.AuthStarterTemplate</PackageId>
     <Title>ASP.NET Core Auth Starter</Title>
     <Authors>John Thomas</Authors>
@@ -13,6 +13,7 @@
     <RepositoryUrl>https://github.com/JohnThomasJTN/Auth-Starter-Template</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageIcon>icon-192.png</PackageIcon>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
     <IncludeContentInPack>true</IncludeContentInPack>
     <IncludeBuildOutput>false</IncludeBuildOutput>
     <ContentTargetFolders>content</ContentTargetFolders>
@@ -24,8 +25,10 @@
 
   <ItemGroup>
     <Content Include="..\**\*"
-             Exclude="..\**\bin\**;..\**\obj\**;..\**\.git\**;..\**\.vs\**;..\**\.claude\**;..\**\logs\**;..\**\TestResults\**;..\**\*.user;..\**\*.suo;..\pack\**" />
-    <Content Include="..\assets\icon-192.png" PackagePath="\" />
+             PackagePath="content\%(RecursiveDir)%(Filename)%(Extension)"
+             Exclude="..\**\bin\**;..\**\obj\**;..\**\.git\**;..\**\.vs\**;..\**\.claude\**;..\**\logs\**;..\**\TestResults\**;..\**\*.user;..\**\*.suo;..\pack\**;..\release-artifacts\**" />
+    <None Include="..\assets\icon-192.png" Pack="true" PackagePath="\" />
+    <None Include="..\README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
 </Project>
