@@ -2,7 +2,8 @@
 
   <PropertyGroup>
     <PackageType>Template</PackageType>
-    <PackageVersion>1.0.7</PackageVersion>
+    <PackageVersion>1.0.8</PackageVersion>
+    <PackageReleaseNotes>v1.0.8 — Removed Azure Trusted Signing from the publish pipeline. Azure Trusted Signing uses short-lived auto-rotating certificates that are incompatible with NuGet.org's package signing requirements. Apologies for the version churn in v1.0.4–1.0.7 as we worked through this. The template content itself is unchanged.</PackageReleaseNotes>
     <PackageId>JTNetworx.AuthStarterTemplate</PackageId>
     <Title>ASP.NET Core Auth Starter</Title>
     <Authors>JT Networx</Authors>

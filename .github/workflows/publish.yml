@@ -7,18 +7,13 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version being published (e.g. 1.0.5)'
+        description: 'Version being published (e.g. 1.0.8)'
         required: true
-
-permissions:
-  id-token: write
-  contents: read
 
 jobs:
   publish:
-    name: Pack, Sign, and Publish
+    name: Pack and Publish
     runs-on: ubuntu-latest
-    environment: production
 
     steps:
       - name: Checkout
@@ -27,39 +22,10 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: |
-            8.0.x
-            10.0.x
+          dotnet-version: 10.0.x
 
       - name: Pack
         run: dotnet pack pack/template-pack.csproj -c Release -o ./release-artifacts
-
-      - name: Azure CLI login
-        if: env.SIGNING_ACCOUNT != ''
-        env:
-          SIGNING_ACCOUNT: ${{ secrets.TRUSTED_SIGNING_ACCOUNT_NAME }}
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Install sign CLI
-        if: env.SIGNING_ACCOUNT != ''
-        env:
-          SIGNING_ACCOUNT: ${{ secrets.TRUSTED_SIGNING_ACCOUNT_NAME }}
-        run: dotnet tool install --tool-path ./tools --prerelease sign
-
-      - name: Sign NuGet package
-        if: env.SIGNING_ACCOUNT != ''
-        env:
-          SIGNING_ACCOUNT: ${{ secrets.TRUSTED_SIGNING_ACCOUNT_NAME }}
-        run: |
-          ./tools/sign code trusted-signing release-artifacts/*.nupkg \
-            --trusted-signing-endpoint "${{ secrets.TRUSTED_SIGNING_ENDPOINT }}" \
-            --trusted-signing-account "${{ secrets.TRUSTED_SIGNING_ACCOUNT_NAME }}" \
-            --trusted-signing-certificate-profile "${{ secrets.TRUSTED_SIGNING_CERT_PROFILE }}" \
-            --verbosity information
 
       - name: Push to NuGet
         run: |

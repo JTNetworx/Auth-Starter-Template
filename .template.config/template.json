@@ -54,7 +54,6 @@
         "assets/Icon.pdn",
         "pack/**",
         "release-artifacts/**",
-        "AZURE_SIGNING_SETUP.md",
         ".github/workflows/publish.yml"
       ]
     }
