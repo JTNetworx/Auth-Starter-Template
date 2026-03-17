@@ -1,6 +1,6 @@
 {
   "$schema": "http://json.schemastore.org/template",
-  "author": "John Thomas",
+  "author": "JT Networx",
   "classifications": [
     "Web",
     "API",
@@ -30,6 +30,9 @@
       "actionId": "210D431B-A78B-4D2F-B762-4ED3E3EA9025",
       "continueOnError": true
     }
+  ],
+  "guids": [
+    "ad7bbc53-294c-410d-bba2-305edd3f3a1e"
   ],
   "sources": [
     {
