@@ -394,6 +394,12 @@ dotnet nuget push release-artifacts/JTNetworx.AuthStarterTemplate.*.nupkg \
 
 ---
 
+## Version Note
+
+Versions 1.0.4–1.0.7 were published while we attempted to integrate Azure Trusted Signing into the NuGet publish pipeline. We discovered that Azure Trusted Signing uses short-lived, auto-rotating certificates that are fundamentally incompatible with NuGet.org's package signing requirements. The signing steps have been removed as of v1.0.8. The template content itself was unchanged across all of these versions — sorry for the noise.
+
+---
+
 ## License
 
 This project is licensed under the [MIT License](LICENSE.txt).
